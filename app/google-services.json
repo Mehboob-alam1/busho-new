@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "128755533280",
+    "firebase_url": "https://gun-deals-dbebc-default-rtdb.firebaseio.com",
+    "project_id": "gun-deals-dbebc",
+    "storage_bucket": "gun-deals-dbebc.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:128755533280:android:0cd8ef4335ae92c0059785",
+        "android_client_info": {
+          "package_name": "com.mehboob.bushorat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDDH6KyLghjRxVVxL8vY73LOy60_t5lZA4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
