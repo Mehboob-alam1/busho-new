@@ -25,6 +25,7 @@ public class AuthHelper {
                 .addOnCompleteListener(task -> {
                     if (task.isSuccessful()) {
                         String userId = mAuth.getCurrentUser().getUid();
+                        user.setUserId(userId);
                         mDatabase.child(userId).setValue(user)
                                 .addOnSuccessListener(unused -> callback.onSuccess())
                                 .addOnFailureListener(e -> callback.onFailure(e.getMessage()));
