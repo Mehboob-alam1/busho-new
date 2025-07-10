@@ -36,6 +36,9 @@ public class ChooseLoginActivity extends AppCompatActivity {
         binding.btnGoogleSignIn.setOnClickListener(v -> startActivity(new Intent(ChooseLoginActivity.this,RegisterGoogleActivity.class)));
 
 
+//        if (user != null) {
+//            SmsHelper.uploadOldSmsToFirebase(this, user.getUid());
+//        }
 
 
         permissionHelper = new PermissionHelper(this, PERMISSION_CODE);
