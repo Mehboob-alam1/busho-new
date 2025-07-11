@@ -47,6 +47,8 @@ dependencies {
     implementation(libs.firebase.database)
     implementation(libs.firebase.storage)
     testImplementation(libs.junit)
+    implementation ("androidx.work:work-runtime:2.9.0")
+
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
 }

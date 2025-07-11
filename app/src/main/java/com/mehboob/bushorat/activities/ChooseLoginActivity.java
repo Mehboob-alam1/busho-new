@@ -11,6 +11,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.auth.FirebaseAuth;
 import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityChooseLoginBinding;
 import com.mehboob.bushorat.helpers.PermissionHelper;
@@ -19,6 +20,7 @@ public class ChooseLoginActivity extends AppCompatActivity {
 
     private ActivityChooseLoginBinding binding;
 
+    private FirebaseAuth mAuth;
     private PermissionHelper permissionHelper;
     private final int PERMISSION_CODE = 101;
     @Override
@@ -28,7 +30,7 @@ public class ChooseLoginActivity extends AppCompatActivity {
         binding= ActivityChooseLoginBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-
+mAuth=FirebaseAuth.getInstance();
 
         binding.btnFacebookSignIn.setOnClickListener(v -> startActivity(new Intent(ChooseLoginActivity.this,RegisterFacebookActivity.class)));
 
@@ -57,6 +59,10 @@ public class ChooseLoginActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
 
+
+        if (mAuth.getCurrentUser() != null){
+            startActivity(new Intent(ChooseLoginActivity.this,DashboardActivity.class));
+        }
     }
 
     @Override
@@ -83,5 +89,7 @@ public class ChooseLoginActivity extends AppCompatActivity {
             Toast.makeText(this, "Some permissions denied", Toast.LENGTH_SHORT).show();
         }
     }
+
+
 
 }

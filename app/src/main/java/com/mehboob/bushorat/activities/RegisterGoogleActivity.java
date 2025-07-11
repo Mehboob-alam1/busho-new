@@ -1,6 +1,7 @@
 package com.mehboob.bushorat.activities;
 
 import android.app.ProgressDialog;
+import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Toast;
 
@@ -60,6 +61,7 @@ public class RegisterGoogleActivity extends AppCompatActivity {
                 public void onSuccess() {
                     loadingDialog.dismiss();
                     Toast.makeText(RegisterGoogleActivity.this, "Signup Successful!", Toast.LENGTH_SHORT).show();
+                    startActivity(new Intent(RegisterGoogleActivity.this,DashboardActivity.class));
                 }
 
                 @Override
