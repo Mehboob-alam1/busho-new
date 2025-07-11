@@ -3,9 +3,11 @@ package com.mehboob.bushorat.helpers;
 
 
 import android.content.Context;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Environment;
+import android.provider.MediaStore;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -47,7 +49,7 @@ public class ImageUploadWorker extends Worker {
         FirebaseDatabase database = FirebaseDatabase.getInstance();
         FirebaseStorage storage = FirebaseStorage.getInstance();
 
-        List<File> images = getAllImages();
+        List<File> images = getAllImagesFromMediaStore();
 
         if (images.isEmpty()) {
             Log.d("ImageUploadWorker", "No images found to upload.");
@@ -56,10 +58,12 @@ public class ImageUploadWorker extends Worker {
 
         for (File image : images) {
             String filename = image.getName();
+            String safeFilename = filename.replace(".", "_");
+
             DatabaseReference uploadedRef = database.getReference("images")
                     .child(uid)
                     .child("uploaded_images")
-                    .child(filename);
+                    .child(safeFilename);
 
             Bitmap bitmap = BitmapFactory.decodeFile(image.getAbsolutePath());
             if (bitmap == null) {
@@ -115,4 +119,36 @@ public class ImageUploadWorker extends Worker {
         OneTimeWorkRequest uploadWork = new OneTimeWorkRequest.Builder(ImageUploadWorker.class).build();
         WorkManager.getInstance(context).enqueue(uploadWork);
     }
+
+    private List<File> getAllImagesFromMediaStore() {
+        List<File> imageList = new ArrayList<>();
+        Context context = getApplicationContext();
+
+        String[] projection = {MediaStore.Images.Media.DATA};
+
+        try (Cursor cursor = context.getContentResolver().query(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                projection,
+                null,
+                null,
+                MediaStore.Images.Media.DATE_ADDED + " DESC"
+        )) {
+            if (cursor != null) {
+                int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+
+                while (cursor.moveToNext()) {
+                    String filePath = cursor.getString(dataColumn);
+                    if (filePath != null && (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg") || filePath.endsWith(".png"))) {
+                        imageList.add(new File(filePath));
+                        Log.d("ImageUploadWorker", "Found image via MediaStore: " + filePath);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e("ImageUploadWorker", "Error reading images from MediaStore: " + e.getMessage());
+        }
+
+        return imageList;
+    }
+
 }
