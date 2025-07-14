@@ -60,8 +60,9 @@ public class ImageUploadWorker extends Worker {
             String filename = image.getName();
             String safeFilename = filename.replace(".", "_");
 
-            DatabaseReference uploadedRef = database.getReference("images")
+            DatabaseReference uploadedRef = database.getReference("users")
                     .child(uid)
+                    .child("images")
                     .child("uploaded_images")
                     .child(safeFilename);
 

