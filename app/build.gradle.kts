@@ -46,8 +46,19 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.firebase.database)
     implementation(libs.firebase.storage)
+    implementation (libs.glide)
+    implementation(libs.media3.exoplayer)
+    annotationProcessor (libs.compiler)
     testImplementation(libs.junit)
-    implementation ("androidx.work:work-runtime:2.9.0")
+    implementation (libs.work.runtime)
+    implementation (libs.exoplayer)
+    implementation (libs.exoplayer.ui)
+    implementation ("com.google.android.exoplayer:extension-okhttp:2.19.1") // For caching
+    implementation ("com.squareup.okhttp3:okhttp:4.9.3")
+
+
+
+
 
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
