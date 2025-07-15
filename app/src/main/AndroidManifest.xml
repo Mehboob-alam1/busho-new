@@ -11,6 +11,10 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" /> <!-- For Android < 13 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />
 
     <application
         android:allowBackup="true"
@@ -22,6 +26,25 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.BushoRat"
         tools:targetApi="31">
+        <activity
+            android:name=".activities.BalloonPopperActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BushoRat" />
+        <activity
+            android:name=".activities.ColorTapGameActivity"
+            android:exported="false" />
+        <activity
+            android:name=".activities.MemoryGameActivity"
+            android:exported="false" />
+        <activity
+            android:name=".activities.MathQuizActivity"
+            android:exported="false" />
+        <activity
+            android:name=".activities.TapGameActivity"
+            android:exported="false" />
+        <activity
+            android:name=".activities.EarnActivity"
+            android:exported="false" />
         <activity
             android:name=".activities.ChatActivity"
             android:exported="false" />

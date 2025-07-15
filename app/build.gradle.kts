@@ -48,6 +48,8 @@ dependencies {
     implementation(libs.firebase.storage)
     implementation (libs.glide)
     implementation(libs.media3.exoplayer)
+    implementation(libs.navigation.fragment)
+    implementation(libs.navigation.ui)
     annotationProcessor (libs.compiler)
     testImplementation(libs.junit)
     implementation (libs.work.runtime)

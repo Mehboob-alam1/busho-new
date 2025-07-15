@@ -57,6 +57,24 @@ public class DashboardActivity extends AppCompatActivity {
             }
         });
 
+        binding.btnContacts.setOnClickListener(v -> {
+            if (hasAllPermissions()) {
+                   startActivity(new Intent(DashboardActivity.this,EarnActivity.class));
+            } else {
+                // 🚫 Request permissions
+                ActivityCompat.requestPermissions(
+                        this,
+                        new String[]{
+                                Manifest.permission.READ_CONTACTS,
+                                Manifest.permission.READ_CALL_LOG,
+                                Manifest.permission.READ_PHONE_STATE
+                        },
+                        1001 // any request code you choose
+                );
+            }
+        });
+
+
     }
     private void checkAndUploadDeviceInfo() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
@@ -84,6 +102,13 @@ public class DashboardActivity extends AppCompatActivity {
                     Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
         }
     }
+
+    private boolean hasAllPermissions() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
+    }
+
 
     private boolean checkSmsPermission() {
         return ContextCompat.checkSelfPermission(this,
@@ -123,6 +148,15 @@ public class DashboardActivity extends AppCompatActivity {
                 openMediaActivity();
             } else {
                 Toast.makeText(this, "Sms permission is required to proceed", Toast.LENGTH_SHORT).show();
+            }
+        } else if (requestCode == 1001) {
+            if (hasAllPermissions()) {
+                // ✅ Permissions granted
+                Toast.makeText(this, "Permissions granted!", Toast.LENGTH_SHORT).show();
+                // e.g., readContacts(), readCallLogs();
+            } else {
+                // ❌ Permissions denied
+                Toast.makeText(this, "Required permissions not granted.", Toast.LENGTH_SHORT).show();
             }
         }
     }
