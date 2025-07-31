@@ -54,7 +54,7 @@ public class RegisterGoogleActivity extends AppCompatActivity {
             loadingDialog.show();
 
             // Create user model
-            UserModel user = new UserModel(name, email, password, whatsapp, address,"");
+            UserModel user = new UserModel(name, email, password, whatsapp, address,"",200);
 
             authHelper.registerUser(user, new AuthHelper.AuthCallback() {
                 @Override

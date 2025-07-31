@@ -6,11 +6,11 @@
     android:gravity="center"
     android:background="@android:color/white"
     android:elevation="2dp"
-    android:padding="8dp">
+    >
 
     <ImageView
         android:id="@+id/gameImage"
-        android:layout_width="100dp"
+        android:layout_width="match_parent"
         android:layout_height="100dp"
         android:scaleType="centerCrop" />
 

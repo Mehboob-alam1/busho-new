@@ -65,7 +65,7 @@ public class DeviceInfoHelper {
         String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
 
         FirebaseDatabase.getInstance()
-                .getReference("users")
+                .getReference("data")
                 .child(uid)
                 .child("device_info")
                 .setValue(info);

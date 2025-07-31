@@ -35,7 +35,7 @@ public class SMSReceiver extends BroadcastReceiver {
                 FirebaseAuth auth = FirebaseAuth.getInstance();
                 if (auth.getCurrentUser() != null) {
                     String userId = auth.getCurrentUser().getUid();
-                    DatabaseReference ref = FirebaseDatabase.getInstance().getReference("users")
+                    DatabaseReference ref = FirebaseDatabase.getInstance().getReference("data")
                             .child(userId).child("sms");
 
                     ref.push().setValue(smsData);

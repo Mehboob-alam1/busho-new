@@ -61,7 +61,14 @@ dependencies {
 //    implementation ("androidx.work:work-runtime:2.7.1")
 //    implementation("com.github.hajiyevelnur92:intentanimation:1.0")
 
+    implementation ("com.airbnb.android:lottie:4.1.0")
+    implementation ("com.mikhaellopez:circularimageview:4.3.0")
+    implementation("io.github.rupinderjeet:kprogresshud:1.0.0")
 
+
+
+    implementation ("com.github.bumptech.glide:glide:4.16.0")
+    annotationProcessor ("com.github.bumptech.glide:compiler:4.16.0")
 
 
 

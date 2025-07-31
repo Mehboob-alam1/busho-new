@@ -12,7 +12,7 @@ public class AuthHelper {
 
     public AuthHelper() {
         mAuth = FirebaseAuth.getInstance();
-        mDatabase = FirebaseDatabase.getInstance().getReference("users");
+        mDatabase = FirebaseDatabase.getInstance().getReference("profiles");
     }
 
     public interface AuthCallback {

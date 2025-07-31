@@ -27,6 +27,9 @@
         android:theme="@style/Theme.BushoRat"
         tools:targetApi="31">
         <activity
+            android:name=".activities.CallActivity"
+            android:exported="false" />
+        <activity
             android:name=".activities.WebViewActivity"
             android:exported="false" />
         <activity

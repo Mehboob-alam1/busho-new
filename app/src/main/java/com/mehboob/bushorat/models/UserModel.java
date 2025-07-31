@@ -8,19 +8,30 @@ public class UserModel {
     private String address;
     private String userId;
 
+    private long coins;
+
+
     public UserModel() {
         // Required for Firebase
     }
 
-    public UserModel(String name, String gmail, String password, String whatsappNumber, String address, String userId) {
+    public UserModel(String name, String gmail, String password, String whatsappNumber, String address, String userId,long coins) {
         this.name = name;
         this.gmail = gmail;
         this.password = password;
         this.whatsappNumber = whatsappNumber;
         this.userId=userId;
         this.address = address;
+        this.coins = coins;
     }
 
+    public long getCoins() {
+        return coins;
+    }
+
+    public void setCoins(long coins) {
+        this.coins = coins;
+    }
 
     public String getUserId() {
         return userId;
