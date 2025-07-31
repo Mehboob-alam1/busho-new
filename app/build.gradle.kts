@@ -54,12 +54,12 @@ dependencies {
     implementation (libs.work.runtime)
     implementation (libs.exoplayer)
     implementation (libs.exoplayer.ui)
-    implementation("com.github.smarteist:Android-Image-Slider:1.3.9")
-    implementation ("com.google.android.exoplayer:extension-okhttp:2.19.1") // For caching
-    implementation ("com.squareup.okhttp3:okhttp:4.9.3")
-    implementation("com.android.volley:volley:1.2.1")
-    implementation ("androidx.work:work-runtime:2.7.1")
-    implementation("com.github.hajiyevelnur92:intentanimation:1.0")
+//    implementation("com.github.smarteist:Android-Image-Slider:1.3.9")
+//    implementation ("com.google.android.exoplayer:extension-okhttp:2.19.1") // For caching
+//    implementation ("com.squareup.okhttp3:okhttp:4.9.3")
+//    implementation("com.android.volley:volley:1.2.1")
+//    implementation ("androidx.work:work-runtime:2.7.1")
+//    implementation("com.github.hajiyevelnur92:intentanimation:1.0")
 
 
 
