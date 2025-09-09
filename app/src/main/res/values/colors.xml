@@ -18,6 +18,8 @@
 
 
     <color name="white">#FFFFFF</color>
+    <color name="black">#1D1D1D</color>
+
     <color name="red">#FF0000</color>
     <color name="darkred">#FF450D</color>
     <color name="green">#03AC1F</color>

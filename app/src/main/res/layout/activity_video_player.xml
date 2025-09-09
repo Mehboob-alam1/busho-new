@@ -5,7 +5,7 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/black"
+    android:background="@color/colorVideoBG"
     tools:context=".activities.VideoPlayerActivity">
 
     <!-- Video Player -->
@@ -15,39 +15,9 @@
         android:layout_height="match_parent"
         android:keepScreenOn="true"
         app:use_controller="true"
-        app:controller_layout_id="@layout/custom_player_control_view"
         app:show_buffering="when_playing"
         app:surface_type="texture_view"
-        app:resize_mode="fit"
-        app:player_layout_id="@layout/custom_player_view" />
-
-    <!-- Loading Overlay -->
-    <ProgressBar
-        android:id="@+id/loadingIndicator"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <!-- Error Message -->
-    <TextView
-        android:id="@+id/errorMessage"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="32dp"
-        android:layout_marginEnd="32dp"
-        android:gravity="center"
-        android:text="Error loading video"
-        android:textColor="@color/white"
-        android:textSize="16sp"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:resize_mode="fit" />
 
     <!-- Top Overlay -->
     <LinearLayout
@@ -67,7 +37,7 @@
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:padding="8dp"
-            android:src="@drawable/ic_arrow_back"
+            android:src="@drawable/back"
             app:tint="@color/white" />
 
         <View
@@ -103,7 +73,7 @@
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:padding="8dp"
-            android:src="@drawable/ic_favorite_border"
+            android:src="@drawable/outline_favorite_24"
             app:tint="@color/white" />
 
         <View
@@ -117,7 +87,7 @@
             android:layout_height="40dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:padding="8dp"
-            android:src="@drawable/ic_share"
+            android:src="@drawable/share"
             app:tint="@color/white" />
     </LinearLayout>
 

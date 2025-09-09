@@ -1,5 +1,6 @@
 package com.mehboob.bushorat.activities;
 
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
@@ -40,6 +41,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
     private String videoUrl;
     private long startTime;
     private boolean isFullscreen = false;
+    private boolean isLiked = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +59,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
         videoUrl = getIntent().getStringExtra("VIDEO_URL");
         if (videoUrl != null) {
             initializePlayer();
+            setupUI();
             trackVideoStart();
         } else {
             Toast.makeText(this, "Video URL not found", Toast.LENGTH_SHORT).show();
@@ -104,6 +107,75 @@ public class VideoPlayerActivity extends AppCompatActivity {
         player.prepare();
         player.setPlayWhenReady(true);
         startTime = System.currentTimeMillis();
+    }
+
+    private void setupUI() {
+        // Back button
+        findViewById(R.id.backButton).setOnClickListener(v -> finish());
+
+        // Fullscreen button
+        findViewById(R.id.fullscreenButton).setOnClickListener(v -> toggleFullscreen());
+
+        // Like button
+        findViewById(R.id.likeButton).setOnClickListener(v -> toggleLike());
+
+        // Share button
+        findViewById(R.id.shareButton).setOnClickListener(v -> shareVideo());
+    }
+
+    private void toggleFullscreen() {
+        if (isFullscreen) {
+            // Exit fullscreen
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_VISIBLE
+            );
+            getSupportActionBar().show();
+            findViewById(R.id.fullscreenButton).setBackgroundResource(R.drawable.ic_fullscreen);
+        } else {
+            // Enter fullscreen
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN |
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            );
+            getSupportActionBar().hide();
+            findViewById(R.id.fullscreenButton).setBackgroundResource(R.drawable.ic_fullscreen_exit);
+        }
+        isFullscreen = !isFullscreen;
+    }
+
+    private void toggleLike() {
+        isLiked = !isLiked;
+        if (isLiked) {
+            ((android.widget.ImageView) findViewById(R.id.likeButton))
+                    .setImageResource(R.drawable.outline_favorite_filled_24);
+            
+            // Track like action
+            if (sessionManager.isUserLoggedIn()) {
+                sessionManager.updateUserActivity("video_liked", new java.util.HashMap<String, Object>() {{
+                    put("videoUrl", videoUrl);
+                    put("timestamp", System.currentTimeMillis());
+                }});
+            }
+        } else {
+            ((android.widget.ImageView) findViewById(R.id.likeButton))
+                    .setImageResource(R.drawable.outline_favorite_24);
+        }
+    }
+
+    private void shareVideo() {
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, "Check out this video: " + videoUrl);
+        startActivity(Intent.createChooser(shareIntent, "Share Video"));
+        
+        // Track share action
+        if (sessionManager.isUserLoggedIn()) {
+            sessionManager.updateUserActivity("video_shared", new java.util.HashMap<String, Object>() {{
+                put("videoUrl", videoUrl);
+                put("timestamp", System.currentTimeMillis());
+            }});
+        }
     }
 
     private void trackVideoStart() {

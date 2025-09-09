@@ -49,6 +49,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.navigation.fragment)
     implementation(libs.navigation.ui)
+    implementation(libs.media3.ui)
     annotationProcessor (libs.compiler)
     testImplementation(libs.junit)
     implementation (libs.work.runtime)
