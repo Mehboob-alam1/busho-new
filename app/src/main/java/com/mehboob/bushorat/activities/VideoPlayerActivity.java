@@ -14,13 +14,11 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection;
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector;
-import androidx.media3.exoplayer.trackselection.TrackSelection;
-import androidx.media3.exoplayer.trackselection.TrackSelector;
 import androidx.media3.exoplayer.upstream.BandwidthMeter;
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter;
 import androidx.media3.ui.PlayerView;
@@ -68,10 +66,11 @@ public class VideoPlayerActivity extends AppCompatActivity {
     }
 
     private void initializePlayer() {
-        // Create adaptive track selector for better quality adaptation
+        // Create bandwidth meter for adaptive quality
         BandwidthMeter bandwidthMeter = new DefaultBandwidthMeter.Builder(this).build();
-        TrackSelection.Factory trackSelectionFactory = new AdaptiveTrackSelection.Factory();
-        TrackSelector trackSelector = new DefaultTrackSelector(this, trackSelectionFactory);
+        
+        // Create track selector for quality adaptation
+        DefaultTrackSelector trackSelector = new DefaultTrackSelector(this);
 
         // Initialize ExoPlayer with optimized settings
         player = new ExoPlayer.Builder(this)
@@ -93,7 +92,7 @@ public class VideoPlayerActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onPlayerError(com.google.android.exoplayer2.PlaybackException error) {
+            public void onPlayerError(PlaybackException error) {
                 Toast.makeText(VideoPlayerActivity.this, "Error playing video: " + error.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
