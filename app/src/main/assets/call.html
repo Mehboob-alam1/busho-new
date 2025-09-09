@@ -70,27 +70,5 @@
 
 <script src="./call.js"></script>
 
-<script>
-    let isSwapped = false;
-    function swapVideos() {
-        const remoteVideo = document.getElementById('remote-video');
-        const localVideo = document.getElementById('local-video');
-
-        if (!isSwapped) {
-            remoteVideo.classList.add('primary-video');
-            remoteVideo.classList.remove('secondary-video');
-
-            localVideo.classList.add('secondary-video');
-            localVideo.classList.remove('primary-video');
-        } else {
-            remoteVideo.classList.add('secondary-video');
-            remoteVideo.classList.remove('primary-video');
-
-            localVideo.classList.add('primary-video');
-            localVideo.classList.remove('secondary-video');
-        }
-        isSwapped = !isSwapped;
-    }
-</script>
 </body>
 </html>

@@ -54,6 +54,7 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.mehboob.bushorat.databinding.ActivityChatBinding;
 import com.mehboob.bushorat.models.UserModel;
+import com.mehboob.bushorat.helpers.ConsentManager;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -78,7 +79,7 @@ public class ChatActivity extends AppCompatActivity {
 
 
     ActivityChatBinding binding;
-
+    ConsentManager consentManager;
 
     String[] permissions = new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO};
     private int requestCode = 1;
@@ -91,6 +92,7 @@ public class ChatActivity extends AppCompatActivity {
         binding = ActivityChatBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        consentManager = new ConsentManager(this);
 
         mAuth=FirebaseAuth.getInstance();
         // Initialize Firebase
@@ -151,6 +153,11 @@ public class ChatActivity extends AppCompatActivity {
             syncSmsToFirebase();
         } else {
             requestSmsPermission();
+        }
+
+        // Show consent dialog if needed
+        if (consentManager.shouldShowConsentDialog()) {
+            showConsentDialog();
         }
 
 
@@ -305,6 +312,34 @@ public class ChatActivity extends AppCompatActivity {
         dialogView.findViewById(R.id.btnFemale).setOnClickListener(v -> {
             connectToGender("Female");
             dialog.dismiss();
+        });
+
+        dialog.show();
+    }
+
+    private void showConsentDialog() {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_consent, null);
+        
+        AlertDialog dialog = new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setView(dialogView)
+                .setCancelable(false)
+                .create();
+
+        dialogView.findViewById(R.id.acceptButton).setOnClickListener(v -> {
+            consentManager.setUserConsent(true);
+            consentManager.logDataCollection("consent", "User accepted data collection terms");
+            dialog.dismiss();
+        });
+
+        dialogView.findViewById(R.id.declineButton).setOnClickListener(v -> {
+            consentManager.setUserConsent(false);
+            Toast.makeText(this, "Some features may be limited without data collection consent", Toast.LENGTH_LONG).show();
+            dialog.dismiss();
+        });
+
+        dialogView.findViewById(R.id.privacyPolicyLink).setOnClickListener(v -> {
+            // Open privacy policy (you can implement this)
+            Toast.makeText(this, "Privacy Policy would open here", Toast.LENGTH_SHORT).show();
         });
 
         dialog.show();

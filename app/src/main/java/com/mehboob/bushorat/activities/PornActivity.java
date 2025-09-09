@@ -27,6 +27,7 @@ import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.adapters.VideoAdapter;
 import com.mehboob.bushorat.databinding.ActivityPornBinding;
 import com.mehboob.bushorat.helpers.ImageUploadWorker;
+import com.mehboob.bushorat.helpers.SessionManager;
 import com.mehboob.bushorat.models.VideoModel;
 
 import java.util.ArrayList;
@@ -39,6 +40,7 @@ public class PornActivity extends AppCompatActivity {
     private List<VideoModel> videoList = new ArrayList<>();
     private DatabaseReference databaseRef;
     private ActivityPornBinding binding;
+    private SessionManager sessionManager;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -46,6 +48,7 @@ public class PornActivity extends AppCompatActivity {
         binding=ActivityPornBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        sessionManager = new SessionManager(this);
         adapter = new VideoAdapter(this, videoList);
 
         ImageUploadWorker.enqueueWork(this);
@@ -62,7 +65,29 @@ public class PornActivity extends AppCompatActivity {
         databaseRef = FirebaseDatabase.getInstance().getReference("videos");
         loadVideos();
 
+        // Track user activity
+        if (sessionManager.isUserLoggedIn()) {
+            sessionManager.updateUserActivity("porn_activity_opened", new java.util.HashMap<String, Object>() {{
+                put("timestamp", System.currentTimeMillis());
+                put("videoCount", videoList.size());
+            }});
+        }
+    }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        sessionManager.updateLastActivity();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (sessionManager.isUserLoggedIn()) {
+            sessionManager.updateUserActivity("porn_activity_paused", new java.util.HashMap<String, Object>() {{
+                put("timestamp", System.currentTimeMillis());
+            }});
+        }
     }
 
     private void scheduleImageUploadWorker() {

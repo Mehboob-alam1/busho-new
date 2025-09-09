@@ -250,6 +250,43 @@ public class CallActivity extends AppCompatActivity {
         isPeerConnected = true;
     }
 
+    public void onConnectionStatus(String status) {
+        runOnUiThread(() -> {
+            // Update UI based on connection status
+            switch (status) {
+                case "connected":
+                    // Peer connected but no stream yet
+                    binding.connectionStatus.setBackgroundResource(R.drawable.status_indicator_connected);
+                    break;
+                case "streaming":
+                    // Video stream is active
+                    binding.connectionStatus.setBackgroundResource(R.drawable.status_indicator_connected);
+                    break;
+                case "disconnected":
+                case "closed":
+                case "call_ended":
+                    // Connection lost or call ended
+                    binding.connectionStatus.setBackgroundResource(R.drawable.status_indicator_disconnected);
+                    break;
+            }
+        });
+    }
+
+    public void onError(String error) {
+        runOnUiThread(() -> {
+            // Show error message to user
+            Toast.makeText(CallActivity.this, "Connection Error: " + error, Toast.LENGTH_LONG).show();
+        });
+    }
+
+    public void onQualityUpdate(String audioQuality, String videoQuality, String connectionType) {
+        runOnUiThread(() -> {
+            // Update quality indicators in UI
+            // You can add quality indicators to the layout and update them here
+            android.util.Log.d("CallQuality", "Audio: " + audioQuality + ", Video: " + videoQuality + ", Connection: " + connectionType);
+        });
+    }
+
     void sendCallRequest(){
         if(!isPeerConnected) {
             Toast.makeText(this, "You are not connected. Please check your internet.", Toast.LENGTH_SHORT).show();
