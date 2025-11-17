@@ -50,6 +50,19 @@
             android:textColor="@color/white"
             android:textSize="12sp" />
 
+        <TextView
+            android:id="@+id/videoTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_margin="8dp"
+            android:background="@drawable/duration_background"
+            android:maxLines="2"
+            android:padding="6dp"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
     </RelativeLayout>
 
 </androidx.cardview.widget.CardView>

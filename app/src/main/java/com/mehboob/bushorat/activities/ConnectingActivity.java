@@ -1,14 +1,15 @@
 package com.mehboob.bushorat.activities;
 
-import android.content.Intent;
-import android.os.Bundle;
-
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+
+import android.content.Intent;
+import android.os.Bundle;
 
 import com.bumptech.glide.Glide;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.FirebaseDatabase;
@@ -41,8 +42,12 @@ public class ConnectingActivity extends AppCompatActivity {
                 .into(binding.profile);
 
         String username = auth.getUid();
-
-        database.getReference().child("users")
+        
+        proceedWithCall(username);
+    }
+    
+    private void proceedWithCall(String username) {
+        database.getReference().child("user_call")
                 .orderByChild("status")
                 .equalTo(0).limitToFirst(1)
                 .addListenerForSingleValueEvent(new ValueEventListener() {
@@ -53,12 +58,12 @@ public class ConnectingActivity extends AppCompatActivity {
                             // Room Available
                             for(DataSnapshot childSnap : snapshot.getChildren()) {
                                 database.getReference()
-                                        .child("users")
+                                        .child("user_call")
                                         .child(childSnap.getKey())
                                         .child("incoming")
                                         .setValue(username);
                                 database.getReference()
-                                        .child("users")
+                                        .child("user_call")
                                         .child(childSnap.getKey())
                                         .child("status")
                                         .setValue(1);
@@ -83,13 +88,13 @@ public class ConnectingActivity extends AppCompatActivity {
                             room.put("status", 0);
 
                             database.getReference()
-                                    .child("users")
+                                    .child("user_call")
                                     .child(username)
                                     .setValue(room).addOnSuccessListener(new OnSuccessListener<Void>() {
                                         @Override
                                         public void onSuccess(Void unused) {
                                             database.getReference()
-                                                    .child("users")
+                                                    .child("user_call")
                                                     .child(username).addValueEventListener(new ValueEventListener() {
                                                         @Override
                                                         public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
@@ -130,9 +135,18 @@ public class ConnectingActivity extends AppCompatActivity {
 
                     }
                 });
-
-
-
-
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Clean up room if user leaves before matching
+        FirebaseUser currentUser = auth.getCurrentUser();
+        if (currentUser != null && !isOkay) {
+            database.getReference()
+                    .child("user_call")
+                    .child(currentUser.getUid())
+                    .removeValue();
+        }
     }
 }

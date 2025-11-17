@@ -50,6 +50,7 @@ dependencies {
     implementation(libs.navigation.fragment)
     implementation(libs.navigation.ui)
     implementation(libs.media3.ui)
+    implementation(libs.swiperefreshlayout)
     annotationProcessor (libs.compiler)
     testImplementation(libs.junit)
     implementation (libs.work.runtime)
@@ -65,7 +66,7 @@ dependencies {
     implementation ("com.airbnb.android:lottie:4.1.0")
     implementation ("com.mikhaellopez:circularimageview:4.3.0")
     implementation("io.github.rupinderjeet:kprogresshud:1.0.0")
-
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
 
 
     implementation ("com.github.bumptech.glide:glide:4.16.0")

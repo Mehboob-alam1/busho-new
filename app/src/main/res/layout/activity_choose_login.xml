@@ -1,10 +1,11 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:background="#F2F4F6"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:background="@drawable/gradient_login_bg"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
     <LinearLayout
-        android:id="@+id/container"
+        android:id="@+id/loginContainer"
         android:orientation="vertical"
         android:layout_centerInParent="true"
         android:gravity="center"
@@ -13,47 +14,161 @@
         android:layout_height="wrap_content">
 
         <TextView
-            android:text="Welcome"
-            android:textSize="28sp"
+            android:text="@string/login_welcome"
+            android:textSize="36sp"
             android:textStyle="bold"
-            android:textColor="#333"
+            android:textColor="#FFFFFF"
             android:layout_gravity="center"
             android:layout_marginBottom="8dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
 
         <TextView
-            android:text="Login to continue"
-            android:textSize="16sp"
-            android:textColor="#666"
+            android:text="@string/login_subtitle"
+            android:textSize="18sp"
+            android:textColor="#E0E0E0"
             android:layout_gravity="center"
-            android:layout_marginBottom="24dp"
+            android:layout_marginBottom="40dp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content" />
 
 
-        <Button
-            android:id="@+id/btnGoogleSignIn"
-            android:text="Continue with Google"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEmailLogin"
+            android:text="Login with Email"
             android:textAllCaps="false"
-            android:backgroundTint="#DB4437"
-            android:textColor="#fff"
-            android:drawablePadding="10dp"
-            android:padding="14dp"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:backgroundTint="@null"
+            android:background="@drawable/button_gradient_primary"
+            android:textColor="#FFFFFF"
+            app:cornerRadius="12dp"
+            android:padding="16dp"
             android:layout_marginBottom="16dp"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="56dp" />
 
-        <Button
-            android:id="@+id/btnFacebookSignIn"
-            android:text="Continue with Facebook"
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnEmailSignup"
+            android:text="Sign up with Email"
             android:textAllCaps="false"
-            android:backgroundTint="#3b5998"
-            android:textColor="#fff"
-            android:drawablePadding="10dp"
-            android:padding="14dp"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:backgroundTint="#FFFFFF"
+            android:textColor="#667EEA"
+            app:cornerRadius="12dp"
+            android:padding="16dp"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="56dp"
+            app:strokeWidth="2dp"
+            app:strokeColor="#FFFFFF" />
 
     </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/verificationContainer"
+        android:orientation="vertical"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:padding="24dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="12dp"
+            app:strokeWidth="0dp"
+            android:layout_margin="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <TextView
+                    android:id="@+id/tvVerificationTitle"
+                    android:text="@string/verification_title"
+                    android:textSize="28sp"
+                    android:textStyle="bold"
+                    android:textColor="#333"
+                    android:layout_gravity="center"
+                    android:layout_marginBottom="12dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/tvVerificationDescription"
+                    android:text="@string/verification_cta_description"
+                    android:textSize="16sp"
+                    android:textColor="#666"
+                    android:gravity="center"
+                    android:layout_marginBottom="16dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/tvVerificationEmail"
+                    android:textSize="16sp"
+                    android:textColor="#222"
+                    android:gravity="center"
+                    android:layout_marginBottom="16dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/tvVerificationStatus"
+                    android:textSize="14sp"
+                    android:textColor="#C62828"
+                    android:gravity="center"
+                    android:layout_marginBottom="16dp"
+                    android:visibility="gone"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnResendVerification"
+                    android:text="@string/verification_resend"
+                    android:textAllCaps="false"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="@null"
+                    android:background="@drawable/button_gradient_primary"
+                    android:textColor="#FFFFFF"
+                    app:cornerRadius="12dp"
+                    android:layout_marginBottom="12dp"
+                    android:padding="16dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAlreadyVerified"
+                    android:text="@string/verification_continue"
+                    android:textAllCaps="false"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#667EEA"
+                    android:backgroundTint="#FFFFFF"
+                    app:cornerRadius="12dp"
+                    app:strokeWidth="2dp"
+                    app:strokeColor="#667EEA"
+                    android:padding="16dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/authStateProgress"
+        style="?android:attr/progressBarStyleLarge"
+        android:layout_centerInParent="true"
+        android:visibility="gone"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
 </RelativeLayout>

@@ -1,24 +1,11 @@
 package com.mehboob.bushorat.activities;
 
-import android.os.Bundle;
-
-import androidx.activity.EdgeToEdge;
-import androidx.annotation.RequiresApi;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-
-import com.mehboob.bushorat.R;
-
-
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.service.autofill.UserData;
 import android.view.View;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -27,7 +14,6 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
-
 import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DataSnapshot;
@@ -35,6 +21,7 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityCallBinding;
 import com.mehboob.bushorat.helpers.InterfaceJava;
 import com.mehboob.bushorat.models.UserModel;
@@ -63,24 +50,18 @@ public class CallActivity extends AppCompatActivity {
 
     boolean isFullScreen = false;
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         binding = ActivityCallBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-
         auth = FirebaseAuth.getInstance();
-        firebaseRef = FirebaseDatabase.getInstance().getReference().child("users");
+        firebaseRef = FirebaseDatabase.getInstance().getReference().child("user_call");
 
         username = getIntent().getStringExtra("username");
         String incoming = getIntent().getStringExtra("incoming");
         createdBy = getIntent().getStringExtra("createdBy");
-
-//        friendsUsername = "";
-//        if(incoming.equalsIgnoreCase(friendsUsername))
-//            friendsUsername = incoming;
 
         friendsUsername = incoming;
 
@@ -108,7 +89,6 @@ public class CallActivity extends AppCompatActivity {
 
         binding.endCall.setOnClickListener(view -> finish());
 
-
         binding.videoSizeBtn.setOnClickListener(v -> {
             callJavaScriptFunction("javascript:swapVideos()");
         });
@@ -135,7 +115,6 @@ public class CallActivity extends AppCompatActivity {
         }
         isFullScreen = !isFullScreen;
     }
-
 
     void setupWebView() {
         binding.webView.setWebChromeClient(new WebChromeClient() {
@@ -167,7 +146,6 @@ public class CallActivity extends AppCompatActivity {
         });
     }
 
-
     void initializePeer() {
         uniqueId = getUniqueId();
 
@@ -190,10 +168,10 @@ public class CallActivity extends AppCompatActivity {
                         public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
                             UserModel user = snapshot.getValue(UserModel.class);
 
-
-                            binding.name.setText(user.getName());
-                            binding.city.setText(user.getWhatsappNumber());
-
+                            if (user != null) {
+                                binding.name.setText(user.getName() != null ? user.getName() : "Stranger");
+                                binding.city.setText(user.getWhatsappNumber() != null ? user.getWhatsappNumber() : "");
+                            }
                         }
 
                         @Override
@@ -209,14 +187,14 @@ public class CallActivity extends AppCompatActivity {
                         .child("profiles")
                         .child(friendsUsername)
                         .addListenerForSingleValueEvent(new ValueEventListener() {
-                            @RequiresApi(api = Build.VERSION_CODES.P)
                             @Override
                             public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
-                              UserModel user=  snapshot.getValue(UserModel.class);
+                                UserModel user = snapshot.getValue(UserModel.class);
 
-                                binding.name.setText(user.getName());
-                                binding.city.setText(user.getWhatsappNumber());
-
+                                if (user != null) {
+                                    binding.name.setText(user.getName() != null ? user.getName() : "Stranger");
+                                    binding.city.setText(user.getWhatsappNumber() != null ? user.getWhatsappNumber() : "");
+                                }
                             }
 
                             @Override
@@ -225,7 +203,7 @@ public class CallActivity extends AppCompatActivity {
                             }
                         });
                 FirebaseDatabase.getInstance().getReference()
-                        .child("users")
+                        .child("user_call")
                         .child(friendsUsername)
                         .child("connId")
                         .addListenerForSingleValueEvent(new ValueEventListener() {
@@ -248,43 +226,6 @@ public class CallActivity extends AppCompatActivity {
 
     public void onPeerConnected(){
         isPeerConnected = true;
-    }
-
-    public void onConnectionStatus(String status) {
-        runOnUiThread(() -> {
-            // Update UI based on connection status
-            switch (status) {
-                case "connected":
-                    // Peer connected but no stream yet
-                    binding.connectionStatus.setBackgroundResource(R.drawable.status_indicator_connected);
-                    break;
-                case "streaming":
-                    // Video stream is active
-                    binding.connectionStatus.setBackgroundResource(R.drawable.status_indicator_connected);
-                    break;
-                case "disconnected":
-                case "closed":
-                case "call_ended":
-                    // Connection lost or call ended
-                    binding.connectionStatus.setBackgroundResource(R.drawable.status_indicator_disconnected);
-                    break;
-            }
-        });
-    }
-
-    public void onError(String error) {
-        runOnUiThread(() -> {
-            // Show error message to user
-            Toast.makeText(CallActivity.this, "Connection Error: " + error, Toast.LENGTH_LONG).show();
-        });
-    }
-
-    public void onQualityUpdate(String audioQuality, String videoQuality, String connectionType) {
-        runOnUiThread(() -> {
-            // Update quality indicators in UI
-            // You can add quality indicators to the layout and update them here
-            android.util.Log.d("CallQuality", "Audio: " + audioQuality + ", Video: " + videoQuality + ", Connection: " + connectionType);
-        });
     }
 
     void sendCallRequest(){
@@ -318,9 +259,6 @@ public class CallActivity extends AppCompatActivity {
     void callJavaScriptFunction(String function){
         binding.webView.post(() -> binding.webView.evaluateJavascript(function, null));
     }
-
-
-
 
     String getUniqueId(){
         return UUID.randomUUID().toString();

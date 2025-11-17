@@ -1,15 +1,72 @@
 package com.mehboob.bushorat.models;
 
 public class VideoModel {
+    private String id;
+    private String title;
+    private String url;
+    private String uploadedBy;
+    private long uploadedAt;
+    private long timestamp;
     private String thumbnailUrl;
     private String videoUrl;
 
-    // Empty constructor for Firebase
-    public VideoModel() {}
+    public VideoModel() {
+        // Required empty constructor
+    }
 
-    // Getters and setters
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getUrl() {
+        return url;
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
+    public String getUploadedBy() {
+        return uploadedBy;
+    }
+
+    public void setUploadedBy(String uploadedBy) {
+        this.uploadedBy = uploadedBy;
+    }
+
+    public long getUploadedAt() {
+        return uploadedAt;
+    }
+
+    public void setUploadedAt(long uploadedAt) {
+        this.uploadedAt = uploadedAt;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(long timestamp) {
+        this.timestamp = timestamp;
+    }
+
     public String getThumbnailUrl() {
-        return thumbnailUrl;
+        if (thumbnailUrl != null && !thumbnailUrl.isEmpty()) {
+            return thumbnailUrl;
+        }
+        return null;
     }
 
     public void setThumbnailUrl(String thumbnailUrl) {
@@ -17,7 +74,10 @@ public class VideoModel {
     }
 
     public String getVideoUrl() {
-        return videoUrl;
+        if (videoUrl != null && !videoUrl.isEmpty()) {
+            return videoUrl;
+        }
+        return url;
     }
 
     public void setVideoUrl(String videoUrl) {

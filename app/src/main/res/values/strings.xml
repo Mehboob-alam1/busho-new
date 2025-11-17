@@ -1,6 +1,54 @@
 <resources>
-    <string name="app_name">BushoRat</string>
-    <!-- Strings used for fragments for navigation -->
+    <string name="app_name">Desi Hub 18+</string>
+    <string name="login_welcome">Welcome</string>
+    <string name="login_subtitle">Log in to continue</string>
+    <string name="login_google">Continue with Google</string>
+    <string name="login_facebook">Continue with Facebook</string>
+    <string name="dashboard_title">Dashboard</string>
+    <string name="dashboard_profile_menu_description">Open profile</string>
+    <string name="verification_title">Verify your email</string>
+    <string name="verification_cta_description">We need to verify your email address before you can use the app.</string>
+    <string name="verification_message">We just sent a verification link to %1$s. Open your inbox, tap the link, then come back here.</string>
+    <string name="verification_resend">Send the email again</string>
+    <string name="verification_continue">I already verified</string>
+    <string name="verification_status_sent">Verification email sent. Check your inbox.</string>
+    <string name="verification_status_wait">Please wait %1$d seconds before requesting another email.</string>
+    <string name="verification_status_error">Couldn\'t send the email: %1$s</string>
+    <string name="verification_status_refreshing">Checking your verification status…</string>
+    <string name="verification_status_reload_failed">We couldn\'t refresh your status. Try again.</string>
+    <string name="verification_status_login_required">Sign back in if you need another verification email.</string>
+    <string name="generic_error">Something went wrong</string>
+    <string name="session_default_email">user@app.com</string>
+    <string name="profile_title">Your profile</string>
+    <string name="profile_email_label">Email</string>
+    <string name="profile_user_id_label">User ID</string>
+    <string name="profile_verification_label">Verification</string>
+    <string name="profile_status_verified">Verified</string>
+    <string name="profile_status_pending">Pending</string>
+    <string name="profile_created_label">Account created</string>
+    <string name="profile_last_login_label">Last login</string>
+    <string name="profile_sessions_label">Sessions</string>
+    <string name="profile_videos_watched_label">Videos watched</string>
+    <string name="profile_total_watch_time_label">Total watch time</string>
+    <string name="profile_logout">Sign out</string>
+    <string name="profile_loading">Loading your profile…</string>
+    <string name="profile_error">We couldn\'t load your profile right now.</string>
+    <string name="profile_not_signed_in">You\'re signed out. Log in again to see your information.</string>
+    <string name="profile_stats_card_title">Usage stats</string>
+    <string name="profile_account_card_title">Account details</string>
+    <string name="profile_last_sync_label">Last update</string>
+    <string name="profile_refresh_hint">Pull down to refresh</string>
+    <string name="player_speed_button">Playback speed</string>
+    <string name="player_quality_button">Video quality</string>
+    <string name="player_fullscreen_button">Toggle fullscreen</string>
+    <string name="player_like_button">Like video</string>
+    <string name="player_share_button">Share video</string>
+    <string name="player_speed_title">Playback speed</string>
+    <string name="player_quality_title">Select quality</string>
+    <string name="player_speed_unavailable">Speed control unavailable</string>
+    <string name="player_quality_unavailable">Quality options unavailable right now</string>
+
+    <!-- Existing placeholder strings -->
     <string name="first_fragment_label">First Fragment</string>
     <string name="second_fragment_label">Second Fragment</string>
     <string name="next">Next</string>
@@ -42,6 +90,5 @@
         libero vel nunc consequat, quis tincidunt nisl eleifend. Cras bibendum enim a justo luctus
         vestibulum. Fusce dictum libero quis erat maximus, vitae volutpat diam dignissim.
     </string>
-    <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>

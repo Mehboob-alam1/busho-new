@@ -1,0 +1,10 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_profile"
+        android:icon="@drawable/ic_profile"
+        android:title="@string/dashboard_profile_menu_description"
+        android:contentDescription="@string/dashboard_profile_menu_description"
+        app:showAsAction="always" />
+</menu>
+

@@ -5,7 +5,6 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/connecting_gradient"
-
     tools:context=".activities.ConnectingActivity">
 
     <TextView
@@ -30,7 +29,6 @@
         app:lottie_autoPlay="true"
         app:lottie_loop="true"
         app:lottie_rawRes="@raw/matching_animation">
-
     </com.airbnb.lottie.LottieAnimationView>
 
     <com.mikhaellopez.circularimageview.CircularImageView

@@ -1,14 +1,14 @@
 {
   "project_info": {
-    "project_number": "128755533280",
-    "firebase_url": "https://gun-deals-dbebc-default-rtdb.firebaseio.com",
-    "project_id": "gun-deals-dbebc",
-    "storage_bucket": "gun-deals-dbebc.appspot.com"
+    "project_number": "926392786310",
+    "firebase_url": "https://phisinig-default-rtdb.firebaseio.com",
+    "project_id": "phisinig",
+    "storage_bucket": "phisinig.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:128755533280:android:0cd8ef4335ae92c0059785",
+        "mobilesdk_app_id": "1:926392786310:android:2b0b233deb316bad80e007",
         "android_client_info": {
           "package_name": "com.mehboob.bushorat"
         }
@@ -16,7 +16,26 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDDH6KyLghjRxVVxL8vY73LOy60_t5lZA4"
+          "current_key": "AIzaSyB2LCkKI3Ah25lKe6cyUFUthp-M9yxg-2Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:926392786310:android:2b02b2f5ceeb733680e007",
+        "android_client_info": {
+          "package_name": "com.mehboob.bushorat_additional"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB2LCkKI3Ah25lKe6cyUFUthp-M9yxg-2Y"
         }
       ],
       "services": {

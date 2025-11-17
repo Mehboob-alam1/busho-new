@@ -22,6 +22,7 @@ public class SessionManager {
     private static final String KEY_VIDEOS_WATCHED = "videos_watched";
     private static final String KEY_TOTAL_WATCH_TIME = "total_watch_time";
     private static final String KEY_PREFERENCES = "user_preferences";
+    private static final String KEY_EMAIL_VERIFIED = "email_verified";
 
     private SharedPreferences preferences;
     private SharedPreferences.Editor editor;
@@ -37,6 +38,11 @@ public class SessionManager {
 
     // Create user session
     public void createUserSession(String userId, String userEmail) {
+        Log.d("SessionManager", "========================================");
+        Log.d("SessionManager", "createUserSession: Starting session creation");
+        Log.d("SessionManager", "createUserSession: User ID = " + userId);
+        Log.d("SessionManager", "createUserSession: User Email = " + userEmail);
+        
         editor.putBoolean(KEY_IS_LOGGED_IN, true);
         editor.putString(KEY_USER_ID, userId);
         editor.putString(KEY_USER_EMAIL, userEmail);
@@ -44,12 +50,16 @@ public class SessionManager {
         editor.putLong(KEY_LAST_ACTIVITY, System.currentTimeMillis());
         editor.putInt(KEY_VIDEOS_WATCHED, 0);
         editor.putLong(KEY_TOTAL_WATCH_TIME, 0);
-        editor.apply();
+        boolean saved = editor.commit(); // Use commit instead of apply for immediate save
+        
+        Log.d("SessionManager", "createUserSession: SharedPreferences saved = " + saved);
+        Log.d("SessionManager", "createUserSession: Verifying - isLoggedIn = " + preferences.getBoolean(KEY_IS_LOGGED_IN, false));
 
         // Create user profile in Firebase
         createUserProfile(userId, userEmail);
         
-        Log.d("SessionManager", "User session created for: " + userEmail);
+        Log.d("SessionManager", "User session created successfully for: " + userEmail);
+        Log.d("SessionManager", "========================================");
     }
 
     // Update last activity
@@ -60,7 +70,9 @@ public class SessionManager {
 
     // Check if user is logged in
     public boolean isUserLoggedIn() {
-        return preferences.getBoolean(KEY_IS_LOGGED_IN, false);
+        boolean isLoggedIn = preferences.getBoolean(KEY_IS_LOGGED_IN, false);
+        Log.d("SessionManager", "isUserLoggedIn: " + isLoggedIn);
+        return isLoggedIn;
     }
 
     // Get user ID
@@ -157,17 +169,23 @@ public class SessionManager {
 
     // Logout user
     public void logoutUser() {
+        Log.d("SessionManager", "========================================");
+        Log.d("SessionManager", "logoutUser: Starting logout process");
+        
         if (isUserLoggedIn()) {
             // Update session duration before logout
             long sessionDuration = getSessionDuration();
+            Log.d("SessionManager", "logoutUser: Session duration = " + sessionDuration);
             userRef.child(getUserId()).child("stats").child("lastSessionDuration").setValue(sessionDuration);
         }
 
         editor.clear();
-        editor.apply();
+        editor.commit();
         
         FirebaseAuth.getInstance().signOut();
-        Log.d("SessionManager", "User logged out");
+        Log.d("SessionManager", "logoutUser: User logged out successfully");
+        Log.d("SessionManager", "logoutUser: Firebase signOut completed");
+        Log.d("SessionManager", "========================================");
     }
 
     // Check session validity
@@ -179,6 +197,16 @@ public class SessionManager {
         
         // Session expires after 24 hours of inactivity
         return timeSinceLastActivity < 24 * 60 * 60 * 1000;
+    }
+
+    // Email verification persistence
+    public void setEmailVerified(boolean verified) {
+        editor.putBoolean(KEY_EMAIL_VERIFIED, verified);
+        editor.apply();
+    }
+
+    public boolean isEmailVerified() {
+        return preferences.getBoolean(KEY_EMAIL_VERIFIED, false);
     }
 
     // Get session statistics

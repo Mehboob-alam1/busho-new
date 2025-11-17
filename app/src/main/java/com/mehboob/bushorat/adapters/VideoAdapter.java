@@ -5,11 +5,8 @@ import android.content.Intent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
-import android.widget.BaseAdapter;
 import android.widget.ImageView;
-import android.widget.ProgressBar;
-
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
@@ -46,15 +43,18 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
     public void onBindViewHolder(@NonNull VideoViewHolder holder, int position) {
         VideoModel video = videoList.get(position);
 
-        // Load thumbnail using Glide with optimized settings
+        holder.title.setText(video.getTitle() != null ? video.getTitle() : context.getString(R.string.app_name));
+
         RequestOptions options = new RequestOptions()
                 .diskCacheStrategy(DiskCacheStrategy.ALL)
                 .centerCrop()
                 .placeholder(R.drawable.ic_video_placeholder)
                 .error(R.drawable.ic_video_error);
 
+        String thumbnailSource = video.getThumbnailUrl() != null ? video.getThumbnailUrl() : video.getVideoUrl();
+
         Glide.with(context)
-                .load(video.getThumbnailUrl())
+                .load(thumbnailSource)
                 .apply(options)
                 .into(holder.thumbnail);
 
@@ -63,15 +63,16 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
             if (sessionManager.isUserLoggedIn()) {
                 sessionManager.updateUserActivity("video_clicked", new java.util.HashMap<String, Object>() {{
                     put("videoUrl", video.getVideoUrl());
-                    put("thumbnailUrl", video.getThumbnailUrl());
-                    put("position", position);
+                    put("title", video.getTitle());
+                    put("uploadedBy", video.getUploadedBy());
                     put("timestamp", System.currentTimeMillis());
                 }});
             }
 
             Intent intent = new Intent(context, VideoPlayerActivity.class);
             intent.putExtra("VIDEO_URL", video.getVideoUrl());
-            intent.putExtra("THUMBNAIL_URL", video.getThumbnailUrl());
+            intent.putExtra("THUMBNAIL_URL", thumbnailSource);
+            intent.putExtra("VIDEO_TITLE", video.getTitle());
             context.startActivity(intent);
         });
     }
@@ -81,9 +82,11 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
 
     public static class VideoViewHolder extends RecyclerView.ViewHolder {
         ImageView thumbnail;
+        TextView title;
         public VideoViewHolder(@NonNull View itemView) {
             super(itemView);
             thumbnail = itemView.findViewById(R.id.thumbnail);
+            title = itemView.findViewById(R.id.videoTitle);
         }
     }
 }

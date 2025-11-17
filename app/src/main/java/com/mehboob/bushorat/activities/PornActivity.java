@@ -1,7 +1,9 @@
 package com.mehboob.bushorat.activities;
 
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.GridView;
 import android.widget.Toast;
 
@@ -31,6 +33,8 @@ import com.mehboob.bushorat.helpers.SessionManager;
 import com.mehboob.bushorat.models.VideoModel;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -47,6 +51,22 @@ public class PornActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         binding=ActivityPornBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
+
+        // Make status bar transparent to match gradient background
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            getWindow().setStatusBarColor(getResources().getColor(android.R.color.transparent, getTheme()));
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
+        }
+
+        // Setup toolbar
+        androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.toolbar);
+        if (toolbar != null) {
+            setSupportActionBar(toolbar);
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+                toolbar.setNavigationOnClickListener(v -> finish());
+            }
+        }
 
         sessionManager = new SessionManager(this);
         adapter = new VideoAdapter(this, videoList);
@@ -122,11 +142,19 @@ public class PornActivity extends AppCompatActivity {
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 videoList.clear();
                 for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
-                    VideoModel video = dataSnapshot.getValue(VideoModel.class);
+                    VideoModel video = mapSnapshotToVideo(dataSnapshot);
                     if (video != null) {
                         videoList.add(video);
                     }
                 }
+                Collections.sort(videoList, new Comparator<VideoModel>() {
+                    @Override
+                    public int compare(VideoModel o1, VideoModel o2) {
+                        long t1 = o1.getUploadedAt() != 0 ? o1.getUploadedAt() : o1.getTimestamp();
+                        long t2 = o2.getUploadedAt() != 0 ? o2.getUploadedAt() : o2.getTimestamp();
+                        return Long.compare(t2, t1);
+                    }
+                });
                 adapter.notifyDataSetChanged();
             }
 
@@ -135,6 +163,41 @@ public class PornActivity extends AppCompatActivity {
                 Toast.makeText(PornActivity.this, "Failed to load videos", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private VideoModel mapSnapshotToVideo(DataSnapshot snapshot) {
+        String id = snapshot.getKey();
+        if (id == null) return null;
+
+        VideoModel video = new VideoModel();
+        video.setId(id);
+        video.setTitle(snapshot.child("title").getValue(String.class));
+        video.setUploadedBy(snapshot.child("uploadedBy").getValue(String.class));
+        video.setUrl(snapshot.child("url").getValue(String.class));
+        video.setVideoUrl(snapshot.child("videoUrl").getValue(String.class));
+        video.setThumbnailUrl(snapshot.child("thumbnailUrl").getValue(String.class));
+        video.setUploadedAt(getLongValue(snapshot.child("uploadedAt")));
+        video.setTimestamp(getLongValue(snapshot.child("timestamp")));
+
+        if (video.getVideoUrl() == null && video.getUrl() != null) {
+            video.setVideoUrl(video.getUrl());
+        }
+
+        return video.getVideoUrl() != null ? video : null;
+    }
+
+    private long getLongValue(DataSnapshot snapshot) {
+        Object value = snapshot.getValue();
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        if (value instanceof String) {
+            try {
+                return Long.parseLong((String) value);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return 0L;
     }
 
 }
