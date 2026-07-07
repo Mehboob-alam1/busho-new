@@ -89,10 +89,10 @@ public class SecretLauncherActivity extends AppCompatActivity {
         AppVisibilityHelper.VisibilityStatus status = visibilityHelper.getVisibilityStatus();
 
         if (status.isHidden) {
-            binding.tvStatus.setText("App is currently hidden. Enter your secret code to restore it.");
+            binding.tvStatus.setText("App is hidden. Dial *#*#737826#*#* and enter your secret code to restore.");
             binding.tvStatus.setTextColor(getResources().getColor(android.R.color.holo_orange_dark, getTheme()));
         } else {
-            binding.tvStatus.setText("App is visible. You can still use this secret launcher as backup.");
+            binding.tvStatus.setText("App is visible in the launcher.");
             binding.tvStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark, getTheme()));
         }
 

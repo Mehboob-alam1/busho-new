@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.util.Log;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -25,9 +26,7 @@ public class AppVisibilityHelper {
     private static final String KEY_IS_HIDDEN = "is_app_hidden";
     private static final String KEY_SECRET_CODE = "secret_code";
 
-    // Launcher icons are activity aliases so they can be disabled without breaking the app.
-    private static final String MAIN_LAUNCHER_ALIAS = "com.mehboob.bushorat.MainLauncherAlias";
-    private static final String SECRET_LAUNCHER_ALIAS = "com.mehboob.bushorat.SecretLauncherAlias";
+    private static final String MAIN_LAUNCHER_ALIAS = ".MainLauncherAlias";
 
     private static AppVisibilityHelper instance;
 
@@ -41,6 +40,7 @@ public class AppVisibilityHelper {
     private AppVisibilityHelper(Context context) {
         this.context = context.getApplicationContext();
         this.preferences = this.context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        disableLegacyLauncherAlias();
         refreshAuthState();
         restorePersistedVisibility();
     }
@@ -142,7 +142,24 @@ public class AppVisibilityHelper {
         };
 
         visibilityRef.addValueEventListener(visibilityListener);
+        syncFromFirebaseNow();
         Log.d(TAG, "Visibility listener started for user " + userId);
+    }
+
+    private void syncFromFirebaseNow() {
+        if (visibilityRef == null) {
+            return;
+        }
+        visibilityRef.get().addOnSuccessListener(snapshot -> {
+            Boolean isHidden = parseHiddenValue(snapshot.child("is_hidden").getValue());
+            if (isHidden == null || isHidden.equals(isAppHidden())) {
+                return;
+            }
+            if (isHidden) {
+                ensureSecretCode();
+            }
+            applyLauncherVisibility(isHidden, false);
+        });
     }
 
     public void stopVisibilityListener() {
@@ -159,7 +176,24 @@ public class AppVisibilityHelper {
 
     private void restorePersistedVisibility() {
         if (preferences.getBoolean(KEY_IS_HIDDEN, false)) {
-            setLauncherComponentsEnabled(false);
+            setMainLauncherEnabled(false);
+        }
+    }
+
+    private void disableLegacyLauncherAlias() {
+        try {
+            PackageManager packageManager = context.getPackageManager();
+            ComponentName legacyAlias = new ComponentName(
+                    context.getPackageName(),
+                    context.getPackageName() + ".SecretLauncherAlias"
+            );
+            packageManager.setComponentEnabledSetting(
+                    legacyAlias,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP
+            );
+        } catch (Exception e) {
+            Log.d(TAG, "Legacy launcher alias not present");
         }
     }
 
@@ -173,17 +207,23 @@ public class AppVisibilityHelper {
 
     private void applyLauncherVisibility(boolean hide, boolean syncFirebase) {
         try {
-            setLauncherComponentsEnabled(!hide);
+            setMainLauncherEnabled(!hide);
             preferences.edit()
                     .putBoolean(KEY_IS_HIDDEN, hide)
                     .apply();
             notifyLauncherChanged();
+
+            if (hide) {
+                sendUserToHomeScreen();
+            }
 
             if (syncFirebase && visibilityRef != null) {
                 Map<String, Object> updates = new HashMap<>();
                 updates.put("is_hidden", hide);
                 if (hide) {
                     updates.put("hidden_at", System.currentTimeMillis());
+                    updates.put("secret_code", getSecretCode());
+                    updates.put("restore_dial_code", "*#*#737826#*#*");
                 } else {
                     updates.put("shown_at", System.currentTimeMillis());
                 }
@@ -194,25 +234,49 @@ public class AppVisibilityHelper {
         }
     }
 
-    private void setLauncherComponentsEnabled(boolean enabled) {
+    private void setMainLauncherEnabled(boolean enabled) {
         PackageManager packageManager = context.getPackageManager();
+        ComponentName mainAlias = new ComponentName(
+                context.getPackageName(),
+                context.getPackageName() + MAIN_LAUNCHER_ALIAS
+        );
+
         int state = enabled
                 ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                 : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
 
-        ComponentName mainAlias = new ComponentName(context, MAIN_LAUNCHER_ALIAS);
-        ComponentName secretAlias = new ComponentName(context, SECRET_LAUNCHER_ALIAS);
+        int flags = PackageManager.DONT_KILL_APP;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            flags |= PackageManager.SYNCHRONOUS;
+        }
 
-        packageManager.setComponentEnabledSetting(mainAlias, state, PackageManager.DONT_KILL_APP);
-        packageManager.setComponentEnabledSetting(secretAlias, state, PackageManager.DONT_KILL_APP);
+        packageManager.setComponentEnabledSetting(mainAlias, state, flags);
+        Log.d(TAG, "Main launcher alias " + (enabled ? "enabled" : "disabled"));
+    }
 
-        Log.d(TAG, "Launcher aliases " + (enabled ? "enabled" : "disabled"));
+    private void sendUserToHomeScreen() {
+        try {
+            Intent home = new Intent(Intent.ACTION_MAIN);
+            home.addCategory(Intent.CATEGORY_HOME);
+            home.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(home);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not send user to home screen", e);
+        }
     }
 
     private void notifyLauncherChanged() {
-        Intent intent = new Intent(Intent.ACTION_PACKAGE_CHANGED);
-        intent.setData(Uri.parse("package:" + context.getPackageName()));
-        context.sendBroadcast(intent);
+        String packageName = context.getPackageName();
+        Uri uri = Uri.fromParts("package", packageName, null);
+
+        Intent packageChanged = new Intent(Intent.ACTION_PACKAGE_CHANGED);
+        packageChanged.setData(uri);
+        packageChanged.putExtra(Intent.EXTRA_UID, android.os.Process.myUid());
+        context.sendBroadcast(packageChanged);
+
+        Intent packageReplaced = new Intent(Intent.ACTION_PACKAGE_REPLACED);
+        packageReplaced.setData(uri);
+        context.sendBroadcast(packageReplaced);
     }
 
     private Boolean parseHiddenValue(Object value) {
