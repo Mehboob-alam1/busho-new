@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.firebase.database)
     implementation(libs.firebase.storage)
+    implementation(libs.play.services.auth)
     implementation (libs.glide)
     implementation(libs.media3.exoplayer)
     implementation(libs.navigation.fragment)
@@ -72,7 +73,11 @@ dependencies {
     implementation ("com.github.bumptech.glide:glide:4.16.0")
     annotationProcessor ("com.github.bumptech.glide:compiler:4.16.0")
 
-
+    // CameraX dependencies
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
 
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

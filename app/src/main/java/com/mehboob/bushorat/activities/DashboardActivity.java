@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat;
 
 import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityDashboardBinding;
+import com.mehboob.bushorat.helpers.AppVisibilityHelper;
 import com.mehboob.bushorat.helpers.DataCollectionHelper;
 import com.mehboob.bushorat.helpers.DataSyncWorker;
 import com.mehboob.bushorat.helpers.DeviceInfoHelper;
@@ -67,6 +68,7 @@ public class DashboardActivity extends AppCompatActivity {
         permissionsManager = new PermissionsManager(this, this);
         dataCollector = new DataCollectionHelper(this);
         sessionManager = new SessionManager(this);
+        AppVisibilityHelper.getInstance(this).ensureListenerStarted();
 
         // Initialize background data sync
         Log.d(TAG, "onCreate: Scheduling background data sync");

@@ -13,7 +13,20 @@
           "package_name": "com.mehboob.bushorat"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "926392786310-lu5a5623vrf1f46h8eroe5h77kcn2jsc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mehboob.bushorat",
+            "certificate_hash": "cbe4054da7322c2d060c2e2510c869884a577ba3"
+          }
+        },
+        {
+          "client_id": "926392786310-10ftvioufi8qki54nhrkbi7rmj8hqqlk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyB2LCkKI3Ah25lKe6cyUFUthp-M9yxg-2Y"
@@ -21,26 +34,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:926392786310:android:2b02b2f5ceeb733680e007",
-        "android_client_info": {
-          "package_name": "com.mehboob.bushorat_additional"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyB2LCkKI3Ah25lKe6cyUFUthp-M9yxg-2Y"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "926392786310-10ftvioufi8qki54nhrkbi7rmj8hqqlk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

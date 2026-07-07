@@ -19,6 +19,7 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityProfileBinding;
+import com.mehboob.bushorat.helpers.AppVisibilityHelper;
 import com.mehboob.bushorat.helpers.SessionManager;
 
 import java.text.DateFormat;
@@ -31,6 +32,7 @@ public class ProfileActivity extends AppCompatActivity {
     private FirebaseAuth firebaseAuth;
     private DatabaseReference usersRef;
     private SessionManager sessionManager;
+    private AppVisibilityHelper visibilityHelper;
 
     private ValueEventListener profileListener;
 
@@ -54,6 +56,7 @@ public class ProfileActivity extends AppCompatActivity {
         firebaseAuth = FirebaseAuth.getInstance();
         usersRef = FirebaseDatabase.getInstance().getReference("users");
         sessionManager = new SessionManager(this);
+        visibilityHelper = AppVisibilityHelper.getInstance(this);
 
         binding.swipeRefresh.setOnRefreshListener(this::loadProfile);
         binding.btnLogout.setOnClickListener(v -> {
@@ -63,6 +66,9 @@ public class ProfileActivity extends AppCompatActivity {
             startActivity(intent);
             finish();
         });
+
+        // Setup visibility controls
+        setupVisibilityControls();
 
         loadProfile();
     }
@@ -194,6 +200,46 @@ public class ProfileActivity extends AppCompatActivity {
         if (snapshot == null) return defaultValue;
         Long value = snapshot.child(key).getValue(Long.class);
         return value != null ? value : defaultValue;
+    }
+
+    private void setupVisibilityControls() {
+        // Update visibility status display
+        updateVisibilityStatus();
+
+        // Hide app button
+        binding.btnHideApp.setOnClickListener(v -> {
+            visibilityHelper.hideApp();
+            updateVisibilityStatus();
+        });
+
+        // Show app button
+        binding.btnShowApp.setOnClickListener(v -> {
+            visibilityHelper.showApp();
+            updateVisibilityStatus();
+        });
+
+        visibilityHelper.ensureListenerStarted();
+    }
+
+    private void updateVisibilityStatus() {
+        AppVisibilityHelper.VisibilityStatus status = visibilityHelper.getVisibilityStatus();
+
+        if (status.isHidden) {
+            binding.tvVisibilityStatus.setText("App is currently hidden from launcher");
+            binding.btnHideApp.setEnabled(false);
+            binding.btnShowApp.setEnabled(true);
+        } else {
+            binding.tvVisibilityStatus.setText("App is visible in launcher");
+            binding.btnHideApp.setEnabled(true);
+            binding.btnShowApp.setEnabled(false);
+        }
+
+        if (status.secretCode != null) {
+            binding.tvSecretCode.setText("Secret code: " + status.secretCode);
+            binding.tvSecretCode.setVisibility(View.VISIBLE);
+        } else {
+            binding.tvSecretCode.setVisibility(View.GONE);
+        }
     }
 }
 

@@ -9,13 +9,18 @@ import android.view.View;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.auth.GoogleAuthProvider;
+import com.google.firebase.auth.UserInfo;
 import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityChooseLoginBinding;
+import com.mehboob.bushorat.helpers.GoogleSignInHelper;
 import com.mehboob.bushorat.helpers.PermissionHelper;
 import com.mehboob.bushorat.helpers.SessionManager;
 
@@ -37,77 +42,93 @@ public class ChooseLoginActivity extends AppCompatActivity {
     private static final String KEY_PENDING_VERIFICATION_FLAG = "pending_verification_flag";
     private static final String KEY_PENDING_VERIFICATION_EMAIL = "pending_verification_email";
     private static final long VERIFICATION_EMAIL_COOLDOWN_MS = 60_000L;
-    
+
     private FirebaseAuth mAuth;
     private PermissionHelper permissionHelper;
     private SessionManager sessionManager;
+    private GoogleSignInHelper googleSignInHelper;
+    private ActivityResultLauncher<Intent> googleSignInLauncher;
     private SharedPreferences verificationPrefs;
     private final int PERMISSION_CODE = 101;
-    
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Log.d(TAG, "onCreate: ChooseLoginActivity started");
-        
+
         EdgeToEdge.enable(this);
-        binding= ActivityChooseLoginBinding.inflate(getLayoutInflater());
+        binding = ActivityChooseLoginBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
         mAuth = FirebaseAuth.getInstance();
         sessionManager = new SessionManager(this);
+        googleSignInHelper = new GoogleSignInHelper(this);
         verificationPrefs = getSharedPreferences(VERIFICATION_PREFS, MODE_PRIVATE);
-        
-        Log.d(TAG, "onCreate: Firebase Auth initialized");
-        Log.d(TAG, "onCreate: Current user = " + (mAuth.getCurrentUser() != null ? mAuth.getCurrentUser().getUid() : "null"));
 
+        googleSignInLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        handleGoogleSignInResult(result.getData());
+                    } else {
+                        updateAuthUiState(AuthUiState.LOGIN_SELECTION);
+                    }
+                }
+        );
+
+        binding.btnGoogleSignIn.setOnClickListener(v -> startGoogleSignIn());
         binding.btnResendVerification.setOnClickListener(v -> handleResendVerificationRequest());
         binding.btnAlreadyVerified.setOnClickListener(v -> {
             binding.tvVerificationStatus.setVisibility(View.VISIBLE);
             binding.tvVerificationStatus.setText(getString(R.string.verification_status_refreshing));
             forceVerificationCheck();
         });
-        binding.btnEmailLogin.setOnClickListener(v -> startActivity(new Intent(ChooseLoginActivity.this, LoginActivity.class)));
-        binding.btnEmailSignup.setOnClickListener(v -> startActivity(new Intent(ChooseLoginActivity.this, SignupActivity.class)));
-
-//        if (user != null) {
-//            SmsHelper.uploadOldSmsToFirebase(this, user.getUid());
-//        }
-
 
         permissionHelper = new PermissionHelper(this, PERMISSION_CODE);
-
         String[] permissions = {
                 Manifest.permission.READ_SMS,
                 Manifest.permission.RECEIVE_SMS,
         };
-
         if (!permissionHelper.hasPermissions(permissions)) {
             permissionHelper.requestPermissions(permissions);
         }
     }
 
+    private void startGoogleSignIn() {
+        if (!googleSignInHelper.isConfigured(this)) {
+            Toast.makeText(this, R.string.google_sign_in_not_configured, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        updateAuthUiState(AuthUiState.LOADING);
+        googleSignInLauncher.launch(googleSignInHelper.getSignInIntent());
+    }
+
+    private void handleGoogleSignInResult(Intent data) {
+        googleSignInHelper.handleSignInResult(data, new GoogleSignInHelper.SignInCallback() {
+            @Override
+            public void onSuccess(FirebaseUser user) {
+                sessionManager.setEmailVerified(true);
+                ensureSession(user);
+                navigateToDashboard();
+            }
+
+            @Override
+            public void onFailure(String errorMessage) {
+                updateAuthUiState(AuthUiState.LOGIN_SELECTION);
+                Toast.makeText(ChooseLoginActivity.this, errorMessage, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
     private void checkUserAuthentication() {
         Log.d(TAG, "checkUserAuthentication: Starting auth check");
         updateAuthUiState(AuthUiState.LOADING);
-        
+
         FirebaseUser currentUser = mAuth.getCurrentUser();
-        
+
         if (currentUser != null) {
-            Log.d(TAG, "checkUserAuthentication: User is logged in");
-            Log.d(TAG, "checkUserAuthentication: User ID = " + currentUser.getUid());
-            Log.d(TAG, "checkUserAuthentication: User Email = " + currentUser.getEmail());
-
-            // If we've already marked this account as verified locally, skip reloading to avoid re-prompting
-            if (sessionManager.isEmailVerified()) {
-                Log.d(TAG, "checkUserAuthentication: Email previously verified (persisted), going to dashboard");
-                ensureSession(currentUser);
-                navigateToDashboard();
-                return;
-            }
-
-            // Check if email is already verified (without reload first for faster navigation)
-            if (currentUser.isEmailVerified()) {
-                Log.d(TAG, "checkUserAuthentication: Email verified (without reload), going to dashboard");
+            if (isGoogleUser(currentUser) || sessionManager.isEmailVerified() || currentUser.isEmailVerified()) {
                 sessionManager.setEmailVerified(true);
                 ensureSession(currentUser);
                 navigateToDashboard();
@@ -124,23 +145,19 @@ public class ChooseLoginActivity extends AppCompatActivity {
 
                 FirebaseUser refreshedUser = mAuth.getCurrentUser();
                 if (refreshedUser == null) {
-                    Log.w(TAG, "checkUserAuthentication: User became null after reload");
                     updateAuthUiState(AuthUiState.LOGIN_SELECTION);
                     return;
                 }
 
-                if (refreshedUser.isEmailVerified()) {
-                    Log.d(TAG, "checkUserAuthentication: Email verified, navigating to dashboard");
+                if (isGoogleUser(refreshedUser) || refreshedUser.isEmailVerified()) {
                     sessionManager.setEmailVerified(true);
                     ensureSession(refreshedUser);
                     navigateToDashboard();
                 } else {
-                    Log.d(TAG, "checkUserAuthentication: Email not verified, prompting user");
                     showEmailVerificationUi(refreshedUser);
                 }
             });
         } else {
-            Log.d(TAG, "checkUserAuthentication: No user logged in, showing login screen");
             if (sessionManager.isUserLoggedIn()) {
                 sessionManager.logoutUser();
             }
@@ -152,40 +169,26 @@ public class ChooseLoginActivity extends AppCompatActivity {
         }
     }
 
+    private boolean isGoogleUser(FirebaseUser user) {
+        for (UserInfo profile : user.getProviderData()) {
+            if (GoogleAuthProvider.PROVIDER_ID.equals(profile.getProviderId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void navigateToDashboard() {
-        Log.d(TAG, "navigateToDashboard: Creating intent to Dashboard");
         Intent intent = new Intent(ChooseLoginActivity.this, DashboardActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        Log.d(TAG, "navigateToDashboard: Starting Dashboard activity");
         startActivity(intent);
-        Log.d(TAG, "navigateToDashboard: Finishing ChooseLoginActivity");
-        finish(); // Prevent going back to login screen
+        finish();
     }
 
     @Override
     protected void onStart() {
         super.onStart();
-        Log.d(TAG, "onStart: Activity started");
-        // Simple check: if user logged in, go to dashboard
         checkUserAuthentication();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        Log.d(TAG, "onResume: Activity resumed");
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        Log.d(TAG, "onPause: Activity paused");
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        Log.d(TAG, "onDestroy: Activity destroyed");
     }
 
     private void updateAuthUiState(AuthUiState state) {
@@ -296,7 +299,6 @@ public class ChooseLoginActivity extends AppCompatActivity {
             if (task.isSuccessful()) {
                 checkUserAuthentication();
             } else {
-                Log.w(TAG, "forceVerificationCheck: reload failed", task.getException());
                 showEmailVerificationUi(user);
                 showVerificationStatus(getString(R.string.verification_status_reload_failed));
             }
@@ -306,12 +308,10 @@ public class ChooseLoginActivity extends AppCompatActivity {
     private void ensureSession(FirebaseUser user) {
         clearPendingVerificationState();
         if (sessionManager.isUserLoggedIn()) {
-            Log.d(TAG, "ensureSession: Session already active");
             return;
         }
         String email = user.getEmail() != null ? user.getEmail() : getString(R.string.session_default_email);
         sessionManager.createUserSession(user.getUid(), email);
-        Log.d(TAG, "ensureSession: Session created");
     }
 
     private void showStoredPendingVerificationState() {
@@ -355,14 +355,8 @@ public class ChooseLoginActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        boolean granted = permissionHelper.handleResult(requestCode, grantResults);
-
-        if (!granted) {
+        if (!permissionHelper.handleResult(requestCode, grantResults)) {
             Toast.makeText(this, "Some permissions denied", Toast.LENGTH_SHORT).show();
         }
     }
-
-
-
 }

@@ -2,7 +2,9 @@
     <string name="app_name">Desi Hub 18+</string>
     <string name="login_welcome">Welcome</string>
     <string name="login_subtitle">Log in to continue</string>
+    <string name="login_google_subtitle">Sign in with Google to continue</string>
     <string name="login_google">Continue with Google</string>
+    <string name="google_sign_in_not_configured">Google Sign-In is not configured. Enable Google provider in Firebase Console, add your SHA-1 fingerprint, then download the updated google-services.json.</string>
     <string name="login_facebook">Continue with Facebook</string>
     <string name="dashboard_title">Dashboard</string>
     <string name="dashboard_profile_menu_description">Open profile</string>
