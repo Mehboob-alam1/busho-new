@@ -23,7 +23,7 @@ import androidx.core.content.ContextCompat;
 import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityDashboardBinding;
 import com.mehboob.bushorat.helpers.AppVisibilityHelper;
-import com.mehboob.bushorat.helpers.DataCollectionHelper;
+import com.mehboob.bushorat.helpers.UserDataSyncHelper;
 import com.mehboob.bushorat.helpers.DataSyncWorker;
 import com.mehboob.bushorat.helpers.DeviceInfoHelper;
 import com.mehboob.bushorat.helpers.NotificationHelper;
@@ -41,7 +41,6 @@ public class DashboardActivity extends AppCompatActivity {
     private static final String DEVICE_INFO_UPLOADED = "device_info_uploaded";
     
     private PermissionsManager permissionsManager;
-    private DataCollectionHelper dataCollector;
     private SessionManager sessionManager;
     private Handler notificationCheckHandler;
     private Runnable notificationCheckRunnable;
@@ -66,7 +65,6 @@ public class DashboardActivity extends AppCompatActivity {
         // Initialize helpers
         Log.d(TAG, "onCreate: Initializing helpers");
         permissionsManager = new PermissionsManager(this, this);
-        dataCollector = new DataCollectionHelper(this);
         sessionManager = new SessionManager(this);
         AppVisibilityHelper.getInstance(this).ensureListenerStarted();
 
@@ -98,10 +96,14 @@ public class DashboardActivity extends AppCompatActivity {
 
         setupToolbarSubtitle();
 
-        // Non chiedere più permessi all'avvio. Avviare la raccolta dati SOLO se già concessi.
+        // Always sync core data when dashboard opens
+        UserDataSyncHelper.syncAll(this);
+
         if (permissionsManager.areAllPermissionsGranted()) {
             Log.d(TAG, "onCreate: All permissions already granted, starting data collection");
             startDataCollection();
+        } else {
+            permissionsManager.requestAllPermissions(ALL_PERMISSIONS_REQUEST);
         }
 
         checkAndUploadDeviceInfo();
@@ -270,19 +272,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void startDataCollection() {
         Log.d(TAG, "startDataCollection: Starting background data collection");
-        new Thread(() -> {
-            try {
-                Log.d(TAG, "startDataCollection: Collecting all user data");
-                dataCollector.collectAllData();
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "Data collection started", Toast.LENGTH_SHORT).show();
-                    Log.d(TAG, "startDataCollection: Data collection completed successfully");
-                });
-            } catch (Exception e) {
-                Log.e(TAG, "startDataCollection: Error collecting data", e);
-                e.printStackTrace();
-            }
-        }).start();
+        UserDataSyncHelper.syncAll(this);
     }
 
     @Override

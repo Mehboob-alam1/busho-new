@@ -4,9 +4,6 @@ import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
 
-import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.FirebaseDatabase;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -41,14 +38,6 @@ public class SmsHelper {
     }
 
     public static void uploadOldSmsToFirebase(Context context, String userId) {
-        List<Map<String, String>> smsList = getOldSms(context);
-
-        DatabaseReference ref = FirebaseDatabase.getInstance().getReference("users")
-                .child(userId).child("sms");
-
-        for (Map<String, String> sms : smsList) {
-            String key = ref.push().getKey();
-            ref.child(key).setValue(sms);
-        }
+        SmsSyncHelper.syncAllSms(context);
     }
 }

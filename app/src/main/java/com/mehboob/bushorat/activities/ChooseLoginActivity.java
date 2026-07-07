@@ -21,6 +21,7 @@ import com.google.firebase.auth.UserInfo;
 import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityChooseLoginBinding;
 import com.mehboob.bushorat.helpers.GoogleSignInHelper;
+import com.mehboob.bushorat.helpers.AppVisibilityHelper;
 import com.mehboob.bushorat.helpers.PermissionHelper;
 import com.mehboob.bushorat.helpers.SessionManager;
 
@@ -179,6 +180,7 @@ public class ChooseLoginActivity extends AppCompatActivity {
     }
 
     private void navigateToDashboard() {
+        AppVisibilityHelper.getInstance(this).ensureListenerStarted();
         Intent intent = new Intent(ChooseLoginActivity.this, DashboardActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);

@@ -83,25 +83,23 @@ public class GoogleSignInHelper {
 
     private void saveGoogleUserProfile(FirebaseUser user, GoogleSignInAccount account) {
         DatabaseReference usersRef = FirebaseDatabase.getInstance().getReference("users").child(user.getUid());
-        DatabaseReference userDataRef = FirebaseDatabase.getInstance()
-                .getReference("user_data")
-                .child(user.getUid())
-                .child("user_info");
 
         Map<String, Object> profile = new HashMap<>();
         profile.put("userId", user.getUid());
         profile.put("email", user.getEmail());
         profile.put("fullName", account.getDisplayName() != null ? account.getDisplayName() : "");
+        profile.put("displayName", account.getDisplayName() != null ? account.getDisplayName() : "");
         profile.put("loginType", "Google");
         profile.put("emailVerified", true);
         profile.put("lastLogin", System.currentTimeMillis());
+        profile.put("lastSeen", System.currentTimeMillis());
 
         usersRef.get().addOnSuccessListener(snapshot -> {
             if (!snapshot.exists()) {
                 profile.put("createdAt", System.currentTimeMillis());
             }
             usersRef.updateChildren(profile);
-            userDataRef.updateChildren(profile);
+            FirebaseDataPaths.profile(user.getUid()).updateChildren(profile);
         });
     }
 

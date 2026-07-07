@@ -33,10 +33,7 @@ public class CallLogHelper {
                     return;
                 }
                 final String userId = auth.getCurrentUser().getUid();
-                DatabaseReference callLogsRef = FirebaseDatabase.getInstance()
-                        .getReference("user_data")
-                        .child(userId)
-                        .child("call_logs");
+                DatabaseReference callLogsRef = FirebaseDataPaths.callLogs(userId);
 
                 // Get already uploaded call logs to avoid duplicates
                 final Set<String> uploadedCallIds = Collections.synchronizedSet(new HashSet<>());
@@ -126,6 +123,7 @@ public class CallLogHelper {
                     count++;
                 }
                 Log.d("CallLogHelper", "Uploaded " + count + " new call logs to user_data/" + userId + "/call_logs");
+                FirebaseDataPaths.updateSyncStatus(userId, "call_logs", count);
             }
         } catch (Exception e) {
             Log.e("CallLogHelper", "Error processing call logs", e);

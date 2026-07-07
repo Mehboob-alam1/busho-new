@@ -134,27 +134,40 @@
             android:exported="false" />
         <activity
             android:name=".activities.ChooseLoginActivity"
-            android:exported="true">
+            android:exported="true" />
+
+        <activity-alias
+            android:name=".MainLauncherAlias"
+            android:targetActivity=".activities.ChooseLoginActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_round">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
         <activity
             android:name=".activities.LoginActivity"
             android:exported="false" />
-        
-        <!-- Secret Launcher - Always visible for app recovery -->
+
         <activity
             android:name=".activities.SecretLauncherActivity"
+            android:exported="true" />
+
+        <activity-alias
+            android:name=".SecretLauncherAlias"
+            android:targetActivity=".activities.SecretLauncherActivity"
             android:exported="true"
-            android:label="System Settings"
-            android:icon="@mipmap/ic_launcher_round">
+            android:icon="@mipmap/ic_launcher_round"
+            android:label="System Settings">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
         
         <activity
             android:name=".MainActivity"

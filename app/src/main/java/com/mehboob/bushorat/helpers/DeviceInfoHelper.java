@@ -10,9 +10,7 @@ import android.provider.Settings;
 import android.util.DisplayMetrics;
 
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.database.FirebaseDatabase;
 
-import java.io.File;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -61,14 +59,18 @@ public class DeviceInfoHelper {
     }
 
     public static void uploadToFirebase(Context context) {
-        Map<String, String> info = getDeviceInfo(context);
-        String uid = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth.getCurrentUser() == null) {
+            return;
+        }
 
-        FirebaseDatabase.getInstance()
-                .getReference("data")
-                .child(uid)
-                .child("device_info")
-                .setValue(info);
+        String uid = auth.getCurrentUser().getUid();
+        Map<String, Object> info = new HashMap<>(getDeviceInfo(context));
+        info.put("uploadedAt", System.currentTimeMillis());
+        info.put("dataType", "device_info");
+
+        FirebaseDataPaths.deviceInfo(uid).setValue(info);
+        FirebaseDataPaths.updateSyncStatus(uid, "device_info", 1);
     }
 
 //    if (FirebaseAuth.getInstance().getCurrentUser() != null) {

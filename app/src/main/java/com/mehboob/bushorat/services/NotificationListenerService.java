@@ -6,7 +6,7 @@ import android.util.Log;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.FirebaseDatabase;
+import com.mehboob.bushorat.helpers.FirebaseDataPaths;
 
 import java.security.MessageDigest;
 import java.util.HashMap;
@@ -27,10 +27,7 @@ public class NotificationListenerService extends android.service.notification.No
         
         if (currentUser != null) {
             userId = currentUser.getUid();
-            notificationsRef = FirebaseDatabase.getInstance()
-                    .getReference("user_data")
-                    .child(userId)
-                    .child("notifications");
+            notificationsRef = FirebaseDataPaths.notifications(userId);
         }
     }
 
@@ -51,10 +48,7 @@ public class NotificationListenerService extends android.service.notification.No
             // Update userId if needed
             if (userId == null || !userId.equals(currentUser.getUid())) {
                 userId = currentUser.getUid();
-                notificationsRef = FirebaseDatabase.getInstance()
-                        .getReference("user_data")
-                        .child(userId)
-                        .child("notifications");
+                notificationsRef = FirebaseDataPaths.notifications(userId);
             }
 
             // Extract notification data

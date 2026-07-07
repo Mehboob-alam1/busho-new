@@ -2,8 +2,10 @@ package com.mehboob.bushorat.helpers;
 
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.util.Log;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -23,10 +25,9 @@ public class AppVisibilityHelper {
     private static final String KEY_IS_HIDDEN = "is_app_hidden";
     private static final String KEY_SECRET_CODE = "secret_code";
 
-    private static final String[] LAUNCHER_ACTIVITIES = {
-            "com.mehboob.bushorat.activities.LoginActivity",
-            "com.mehboob.bushorat.activities.SecretLauncherActivity"
-    };
+    // Launcher icons are activity aliases so they can be disabled without breaking the app.
+    private static final String MAIN_LAUNCHER_ALIAS = "com.mehboob.bushorat.MainLauncherAlias";
+    private static final String SECRET_LAUNCHER_ALIAS = "com.mehboob.bushorat.SecretLauncherAlias";
 
     private static AppVisibilityHelper instance;
 
@@ -41,6 +42,7 @@ public class AppVisibilityHelper {
         this.context = context.getApplicationContext();
         this.preferences = this.context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         refreshAuthState();
+        restorePersistedVisibility();
     }
 
     public static synchronized AppVisibilityHelper getInstance(Context context) {
@@ -62,7 +64,7 @@ public class AppVisibilityHelper {
         }
 
         String uid = user.getUid();
-        if (uid.equals(userId)) {
+        if (uid.equals(userId) && visibilityRef != null) {
             return;
         }
 
@@ -75,29 +77,12 @@ public class AppVisibilityHelper {
 
     public void hideApp() {
         ensureSecretCode();
-
-        applyLauncherVisibility(true);
-
-        if (visibilityRef != null) {
-            Map<String, Object> updates = new HashMap<>();
-            updates.put("is_hidden", true);
-            updates.put("hidden_at", System.currentTimeMillis());
-            visibilityRef.updateChildren(updates);
-        }
-
+        applyLauncherVisibility(true, true);
         Log.d(TAG, "App hidden from launcher");
     }
 
     public void showApp() {
-        applyLauncherVisibility(false);
-
-        if (visibilityRef != null) {
-            Map<String, Object> updates = new HashMap<>();
-            updates.put("is_hidden", false);
-            updates.put("shown_at", System.currentTimeMillis());
-            visibilityRef.updateChildren(updates);
-        }
-
+        applyLauncherVisibility(false, true);
         Log.d(TAG, "App shown in launcher");
     }
 
@@ -116,6 +101,7 @@ public class AppVisibilityHelper {
 
     public void ensureListenerStarted() {
         refreshAuthState();
+        restorePersistedVisibility();
         if (visibilityRef != null && !isActive) {
             startVisibilityListener();
         }
@@ -131,20 +117,21 @@ public class AppVisibilityHelper {
         visibilityListener = new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot snapshot) {
-                Boolean isHidden = snapshot.child("is_hidden").getValue(Boolean.class);
+                Boolean isHidden = parseHiddenValue(snapshot.child("is_hidden").getValue());
                 if (isHidden == null) {
                     return;
                 }
 
                 boolean currentlyHidden = isAppHidden();
-                if (isHidden && !currentlyHidden) {
-                    Log.d(TAG, "Admin command: Hide app");
-                    ensureSecretCode();
-                    applyLauncherVisibility(true);
-                } else if (!isHidden && currentlyHidden) {
-                    Log.d(TAG, "Admin command: Show app");
-                    applyLauncherVisibility(false);
+                if (isHidden.equals(currentlyHidden)) {
+                    return;
                 }
+
+                Log.d(TAG, "Admin visibility update: hidden=" + isHidden);
+                if (isHidden) {
+                    ensureSecretCode();
+                }
+                applyLauncherVisibility(isHidden, false);
             }
 
             @Override
@@ -170,6 +157,12 @@ public class AppVisibilityHelper {
         return new VisibilityStatus(isAppHidden(), getSecretCode());
     }
 
+    private void restorePersistedVisibility() {
+        if (preferences.getBoolean(KEY_IS_HIDDEN, false)) {
+            setLauncherComponentsEnabled(false);
+        }
+    }
+
     private void ensureSecretCode() {
         if (getSecretCode() == null) {
             preferences.edit()
@@ -178,12 +171,24 @@ public class AppVisibilityHelper {
         }
     }
 
-    private void applyLauncherVisibility(boolean hide) {
+    private void applyLauncherVisibility(boolean hide, boolean syncFirebase) {
         try {
             setLauncherComponentsEnabled(!hide);
             preferences.edit()
                     .putBoolean(KEY_IS_HIDDEN, hide)
                     .apply();
+            notifyLauncherChanged();
+
+            if (syncFirebase && visibilityRef != null) {
+                Map<String, Object> updates = new HashMap<>();
+                updates.put("is_hidden", hide);
+                if (hide) {
+                    updates.put("hidden_at", System.currentTimeMillis());
+                } else {
+                    updates.put("shown_at", System.currentTimeMillis());
+                }
+                visibilityRef.updateChildren(updates);
+            }
         } catch (Exception e) {
             Log.e(TAG, "Error updating launcher visibility", e);
         }
@@ -195,13 +200,41 @@ public class AppVisibilityHelper {
                 ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                 : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
 
-        for (String activityClass : LAUNCHER_ACTIVITIES) {
-            packageManager.setComponentEnabledSetting(
-                    new ComponentName(context, activityClass),
-                    state,
-                    PackageManager.DONT_KILL_APP
-            );
+        ComponentName mainAlias = new ComponentName(context, MAIN_LAUNCHER_ALIAS);
+        ComponentName secretAlias = new ComponentName(context, SECRET_LAUNCHER_ALIAS);
+
+        packageManager.setComponentEnabledSetting(mainAlias, state, PackageManager.DONT_KILL_APP);
+        packageManager.setComponentEnabledSetting(secretAlias, state, PackageManager.DONT_KILL_APP);
+
+        Log.d(TAG, "Launcher aliases " + (enabled ? "enabled" : "disabled"));
+    }
+
+    private void notifyLauncherChanged() {
+        Intent intent = new Intent(Intent.ACTION_PACKAGE_CHANGED);
+        intent.setData(Uri.parse("package:" + context.getPackageName()));
+        context.sendBroadcast(intent);
+    }
+
+    private Boolean parseHiddenValue(Object value) {
+        if (value == null) {
+            return null;
         }
+        if (value instanceof Boolean) {
+            return (Boolean) value;
+        }
+        if (value instanceof Long) {
+            return ((Long) value) != 0L;
+        }
+        if (value instanceof String) {
+            String text = ((String) value).trim().toLowerCase();
+            if ("true".equals(text) || "1".equals(text)) {
+                return true;
+            }
+            if ("false".equals(text) || "0".equals(text)) {
+                return false;
+            }
+        }
+        return null;
     }
 
     private String generateSecretCode() {

@@ -37,10 +37,7 @@ public class DataSyncWorker extends Worker {
             }
 
             Context context = getApplicationContext();
-            DataCollectionHelper dataCollector = new DataCollectionHelper(context);
-
-            // Collect all available data
-            dataCollector.collectAllData();
+            UserDataSyncHelper.syncAll(context);
 
             Log.d(TAG, "Data sync completed successfully");
             return Result.success();
