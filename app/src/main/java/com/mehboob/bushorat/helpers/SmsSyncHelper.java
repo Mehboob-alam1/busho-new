@@ -24,6 +24,12 @@ public class SmsSyncHelper {
     private static final String TAG = "SmsSyncHelper";
 
     public static void syncAllSms(Context context) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_SMS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "READ_SMS permission not granted");
+            return;
+        }
+
         new Thread(() -> {
             FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
             if (user == null) {

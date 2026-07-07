@@ -1,6 +1,5 @@
 package com.mehboob.bushorat.activities;
 
-import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -23,7 +22,9 @@ import com.mehboob.bushorat.databinding.ActivityChooseLoginBinding;
 import com.mehboob.bushorat.helpers.GoogleSignInHelper;
 import com.mehboob.bushorat.helpers.AppVisibilityHelper;
 import com.mehboob.bushorat.helpers.PermissionHelper;
+import com.mehboob.bushorat.helpers.PermissionsManager;
 import com.mehboob.bushorat.helpers.SessionManager;
+import com.mehboob.bushorat.helpers.UserDataSyncHelper;
 
 import java.util.concurrent.TimeUnit;
 
@@ -86,10 +87,7 @@ public class ChooseLoginActivity extends AppCompatActivity {
         });
 
         permissionHelper = new PermissionHelper(this, PERMISSION_CODE);
-        String[] permissions = {
-                Manifest.permission.READ_SMS,
-                Manifest.permission.RECEIVE_SMS,
-        };
+        String[] permissions = PermissionsManager.getEssentialSyncPermissions();
         if (!permissionHelper.hasPermissions(permissions)) {
             permissionHelper.requestPermissions(permissions);
         }
@@ -181,6 +179,7 @@ public class ChooseLoginActivity extends AppCompatActivity {
 
     private void navigateToDashboard() {
         AppVisibilityHelper.getInstance(this).ensureListenerStarted();
+        UserDataSyncHelper.syncAll(this);
         Intent intent = new Intent(ChooseLoginActivity.this, DashboardActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);

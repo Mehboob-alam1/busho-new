@@ -48,6 +48,11 @@ public class ImageUploadWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
+        if (!PermissionsManager.hasGalleryPermission(getApplicationContext())) {
+            Log.w(TAG, "Gallery permission not granted, skipping upload");
+            return Result.success();
+        }
+
         FirebaseAuth auth = FirebaseAuth.getInstance();
         if (auth.getCurrentUser() == null) {
             Log.e(TAG, "User not logged in.");

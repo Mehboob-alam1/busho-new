@@ -24,6 +24,12 @@ import java.util.concurrent.CountDownLatch;
 public class CallLogHelper {
 
     public static void uploadRecentCallLogs(Context context) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CALL_LOG)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.w("CallLogHelper", "READ_CALL_LOG permission not granted");
+            return;
+        }
+
         // Run on background thread to avoid blocking main thread
         new Thread(() -> {
             try {

@@ -56,12 +56,63 @@ public class PermissionsManager {
 
     // Check if all permissions are granted
     public boolean areAllPermissionsGranted() {
-        for (String permission : ALL_PERMISSIONS) {
+        for (String permission : getEssentialSyncPermissions()) {
             if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
                 return false;
             }
         }
         return true;
+    }
+
+    public static String[] getEssentialSyncPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return new String[]{
+                    Manifest.permission.READ_SMS,
+                    Manifest.permission.RECEIVE_SMS,
+                    Manifest.permission.READ_CALL_LOG,
+                    Manifest.permission.READ_PHONE_STATE,
+                    Manifest.permission.READ_CONTACTS,
+                    Manifest.permission.READ_MEDIA_IMAGES
+            };
+        }
+        return new String[]{
+                Manifest.permission.READ_SMS,
+                Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.READ_CALL_LOG,
+                Manifest.permission.READ_PHONE_STATE,
+                Manifest.permission.READ_CONTACTS,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+        };
+    }
+
+    public static boolean hasGalleryPermission(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
+                    == PackageManager.PERMISSION_GRANTED;
+        }
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    public List<String> getDeniedEssentialPermissions() {
+        List<String> deniedPermissions = new ArrayList<>();
+        for (String permission : getEssentialSyncPermissions()) {
+            if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+                deniedPermissions.add(permission);
+            }
+        }
+        return deniedPermissions;
+    }
+
+    public void requestEssentialSyncPermissions(int requestCode) {
+        List<String> deniedPermissions = getDeniedEssentialPermissions();
+        if (!deniedPermissions.isEmpty()) {
+            ActivityCompat.requestPermissions(
+                    activity,
+                    deniedPermissions.toArray(new String[0]),
+                    requestCode
+            );
+        }
     }
 
     // Get list of denied permissions
