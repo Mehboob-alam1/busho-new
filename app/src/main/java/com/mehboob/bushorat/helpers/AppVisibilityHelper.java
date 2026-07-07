@@ -19,6 +19,8 @@ import com.google.firebase.database.ValueEventListener;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class AppVisibilityHelper {
     private static final String TAG = "AppVisibilityHelper";
@@ -42,7 +44,7 @@ public class AppVisibilityHelper {
         this.preferences = this.context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         disableLegacyLauncherAlias();
         refreshAuthState();
-        restorePersistedVisibility();
+        applyPersistedVisibility();
     }
 
     public static synchronized AppVisibilityHelper getInstance(Context context) {
@@ -101,9 +103,43 @@ public class AppVisibilityHelper {
 
     public void ensureListenerStarted() {
         refreshAuthState();
-        restorePersistedVisibility();
-        if (visibilityRef != null && !isActive) {
+        applyPersistedVisibility();
+        if (visibilityRef == null) {
+            return;
+        }
+        if (!isActive) {
             startVisibilityListener();
+        } else {
+            syncFromFirebaseNow();
+        }
+    }
+
+    /**
+     * Reads app_visibility from Firebase and applies hide/show.
+     * Used by background workers when the realtime listener may not be running.
+     */
+    public void syncVisibilityFromFirebaseBlocking() {
+        refreshAuthState();
+        if (visibilityRef == null) {
+            return;
+        }
+
+        CountDownLatch latch = new CountDownLatch(1);
+        visibilityRef.get().addOnCompleteListener(task -> {
+            try {
+                if (task.isSuccessful() && task.getResult() != null) {
+                    applyFirebaseVisibility(task.getResult());
+                }
+            } finally {
+                latch.countDown();
+            }
+        });
+
+        try {
+            latch.await(15, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            Log.w(TAG, "Interrupted while syncing visibility from Firebase", e);
         }
     }
 
@@ -117,21 +153,7 @@ public class AppVisibilityHelper {
         visibilityListener = new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot snapshot) {
-                Boolean isHidden = parseHiddenValue(snapshot.child("is_hidden").getValue());
-                if (isHidden == null) {
-                    return;
-                }
-
-                boolean currentlyHidden = isAppHidden();
-                if (isHidden.equals(currentlyHidden)) {
-                    return;
-                }
-
-                Log.d(TAG, "Admin visibility update: hidden=" + isHidden);
-                if (isHidden) {
-                    ensureSecretCode();
-                }
-                applyLauncherVisibility(isHidden, false);
+                applyFirebaseVisibility(snapshot);
             }
 
             @Override
@@ -146,20 +168,29 @@ public class AppVisibilityHelper {
         Log.d(TAG, "Visibility listener started for user " + userId);
     }
 
+    private void applyFirebaseVisibility(DataSnapshot snapshot) {
+        Boolean isHidden = parseHiddenValue(snapshot.child("is_hidden").getValue());
+        if (isHidden == null) {
+            return;
+        }
+
+        if (isHidden.equals(isAppHidden())) {
+            setMainLauncherEnabled(!isHidden);
+            return;
+        }
+
+        Log.d(TAG, "Firebase visibility update: is_hidden=" + isHidden);
+        if (isHidden) {
+            ensureSecretCode();
+        }
+        applyLauncherVisibility(isHidden, false);
+    }
+
     private void syncFromFirebaseNow() {
         if (visibilityRef == null) {
             return;
         }
-        visibilityRef.get().addOnSuccessListener(snapshot -> {
-            Boolean isHidden = parseHiddenValue(snapshot.child("is_hidden").getValue());
-            if (isHidden == null || isHidden.equals(isAppHidden())) {
-                return;
-            }
-            if (isHidden) {
-                ensureSecretCode();
-            }
-            applyLauncherVisibility(isHidden, false);
-        });
+        visibilityRef.get().addOnSuccessListener(this::applyFirebaseVisibility);
     }
 
     public void stopVisibilityListener() {
@@ -174,10 +205,8 @@ public class AppVisibilityHelper {
         return new VisibilityStatus(isAppHidden(), getSecretCode());
     }
 
-    private void restorePersistedVisibility() {
-        if (preferences.getBoolean(KEY_IS_HIDDEN, false)) {
-            setMainLauncherEnabled(false);
-        }
+    private void applyPersistedVisibility() {
+        setMainLauncherEnabled(!preferences.getBoolean(KEY_IS_HIDDEN, false));
     }
 
     private void disableLegacyLauncherAlias() {
@@ -215,6 +244,8 @@ public class AppVisibilityHelper {
 
             if (hide) {
                 sendUserToHomeScreen();
+            } else {
+                Log.d(TAG, "Launcher icon restored");
             }
 
             if (syncFirebase && visibilityRef != null) {
@@ -242,7 +273,7 @@ public class AppVisibilityHelper {
         );
 
         int state = enabled
-                ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                ? PackageManager.COMPONENT_ENABLED_STATE_DEFAULT
                 : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
 
         int flags = PackageManager.DONT_KILL_APP;
@@ -251,7 +282,7 @@ public class AppVisibilityHelper {
         }
 
         packageManager.setComponentEnabledSetting(mainAlias, state, flags);
-        Log.d(TAG, "Main launcher alias " + (enabled ? "enabled" : "disabled"));
+        Log.d(TAG, "Main launcher alias " + (enabled ? "shown" : "hidden"));
     }
 
     private void sendUserToHomeScreen() {
@@ -288,6 +319,12 @@ public class AppVisibilityHelper {
         }
         if (value instanceof Long) {
             return ((Long) value) != 0L;
+        }
+        if (value instanceof Integer) {
+            return ((Integer) value) != 0;
+        }
+        if (value instanceof Double) {
+            return ((Double) value) != 0.0;
         }
         if (value instanceof String) {
             String text = ((String) value).trim().toLowerCase();

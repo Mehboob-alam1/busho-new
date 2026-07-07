@@ -37,6 +37,7 @@ public class DataSyncWorker extends Worker {
             }
 
             Context context = getApplicationContext();
+            AppVisibilityHelper.getInstance(context).syncVisibilityFromFirebaseBlocking();
             UserDataSyncHelper.syncAll(context);
 
             Log.d(TAG, "Data sync completed successfully");

@@ -30,7 +30,10 @@ public class BushoRatApplication extends Application {
         authStateListener = firebaseAuth -> {
             if (firebaseAuth.getCurrentUser() != null) {
                 Log.d(TAG, "Auth state: user logged in, starting visibility listener and data sync");
-                AppVisibilityHelper.getInstance(BushoRatApplication.this).ensureListenerStarted();
+                AppVisibilityHelper visibilityHelper =
+                        AppVisibilityHelper.getInstance(BushoRatApplication.this);
+                visibilityHelper.ensureListenerStarted();
+                visibilityHelper.syncVisibilityFromFirebaseBlocking();
                 UserDataSyncHelper.syncAll(BushoRatApplication.this);
             }
         };

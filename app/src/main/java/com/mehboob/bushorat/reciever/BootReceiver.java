@@ -23,7 +23,9 @@ public class BootReceiver extends BroadcastReceiver {
             // Only start data collection if user is logged in
             if (sessionManager.isUserLoggedIn() && sessionManager.isSessionValid()) {
                 DataSyncWorker.schedulePeriodicSync(context);
-                AppVisibilityHelper.getInstance(context).ensureListenerStarted();
+                AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(context);
+                visibilityHelper.ensureListenerStarted();
+                visibilityHelper.syncVisibilityFromFirebaseBlocking();
                 UserDataSyncHelper.syncAll(context);
             }
         }
