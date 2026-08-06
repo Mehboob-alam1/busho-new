@@ -77,6 +77,13 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (sessionManager != null) {
+            sessionManager.updateLastActivity();
+        }
+        UserDataSyncHelper.syncAll(this);
+        if (FeaturePermissions.areVideosUnlocked(this)) {
+            ImageUploadWorker.schedulePeriodicUpload(this);
+        }
         if (AppUsageSyncHelper.hasUsageAccess(this)) {
             AppUsageSyncHelper.syncIfAllowed(this);
         }
@@ -202,18 +209,6 @@ public class DashboardActivity extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (sessionManager != null) {
-            sessionManager.updateLastActivity();
-        }
-        UserDataSyncHelper.syncAll(this);
-        if (FeaturePermissions.areVideosUnlocked(this)) {
-            ImageUploadWorker.schedulePeriodicUpload(this);
-        }
     }
 
     public void logout() {
