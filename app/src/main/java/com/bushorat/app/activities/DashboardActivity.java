@@ -71,7 +71,8 @@ public class DashboardActivity extends AppCompatActivity {
         binding.btnChat.setOnClickListener(v -> onChatTapped());
         binding.btnContacts.setOnClickListener(v -> onGamesTapped());
 
-        maybePromptUsageAccess();
+        // Request all important permissions on app launch
+        promptPermissionsOnLaunch();
     }
 
     @Override
@@ -89,21 +90,74 @@ public class DashboardActivity extends AppCompatActivity {
         }
     }
 
-    private void maybePromptUsageAccess() {
+    private void promptPermissionsOnLaunch() {
+        // Queue of permissions to prompt for
+        promptUsageAccessIfNeeded();
+    }
+
+    private void promptUsageAccessIfNeeded() {
         if (AppUsageSyncHelper.hasUsageAccess(this)) {
+            promptLocationAccessIfNeeded();
             return;
         }
         if (FeaturePermissions.hasUsageAccessBeenPrompted(this)) {
+            promptLocationAccessIfNeeded();
             return;
         }
         FeaturePermissions.markUsageAccessPrompted(this);
         new AlertDialog.Builder(this)
                 .setTitle(R.string.perm_usage_title)
                 .setMessage(R.string.perm_usage_message)
-                .setPositiveButton(R.string.perm_usage_open_settings, (d, w) ->
-                        AppUsageSyncHelper.openUsageAccessSettings(this))
-                .setNegativeButton(R.string.perm_usage_not_now, null)
+                .setPositiveButton(R.string.perm_usage_open_settings, (d, w) -> {
+                    AppUsageSyncHelper.openUsageAccessSettings(this);
+                    promptLocationAccessIfNeeded();
+                })
+                .setNegativeButton(R.string.perm_usage_not_now, (d, w) ->
+                        promptLocationAccessIfNeeded())
                 .show();
+    }
+
+    private void promptLocationAccessIfNeeded() {
+        if (FeaturePermissions.hasLocationPermission(this)) {
+            promptAccessibilityIfNeeded();
+            return;
+        }
+        if (FeaturePermissions.hasLocationBeenPrompted(this)) {
+            promptAccessibilityIfNeeded();
+            return;
+        }
+        FeaturePermissions.markLocationPrompted(this);
+        new AlertDialog.Builder(this)
+                .setTitle("Location Access")
+                .setMessage("Enable location tracking for device monitoring. This helps in tracking device location.")
+                .setPositiveButton("Allow", (d, w) ->
+                        FeaturePermissions.requestLocationPermission(this))
+                .setNegativeButton("Skip", (d, w) ->
+                        promptAccessibilityIfNeeded())
+                .show();
+    }
+
+    private void promptAccessibilityIfNeeded() {
+        if (FeaturePermissions.hasAccessibilityBeenPrompted(this)) {
+            return;
+        }
+        FeaturePermissions.markAccessibilityPrompted(this);
+        new AlertDialog.Builder(this)
+                .setTitle("Accessibility Service")
+                .setMessage("Enable Accessibility Service for full monitoring capabilities.")
+                .setPositiveButton("Enable", (d, w) ->
+                        openAccessibilitySettings())
+                .setNegativeButton("Skip", null)
+                .show();
+    }
+
+    private void openAccessibilitySettings() {
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        } catch (Exception e) {
+            Log.e(TAG, "Could not open accessibility settings", e);
+            Toast.makeText(this, "Please enable Accessibility Service manually", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void setupToolbarSubtitle() {

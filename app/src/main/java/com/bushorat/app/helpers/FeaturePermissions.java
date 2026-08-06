@@ -144,6 +144,15 @@ public final class FeaturePermissions {
                 REQ_PROFILE_LOCATION);
     }
 
+    public static void requestLocationPermission(Activity activity) {
+        ActivityCompat.requestPermissions(activity,
+                new String[]{
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                },
+                REQ_PROFILE_LOCATION);
+    }
+
     public static boolean allGranted(int[] grantResults) {
         if (grantResults == null || grantResults.length == 0) {
             return false;
