@@ -178,25 +178,35 @@ public class AppVisibilityHelper {
             // No remote hide policy yet — keep launcher available.
             preferences.edit().putBoolean(KEY_IS_HIDDEN, false).apply();
             ensureLauncherComponentEnabled();
+            Log.d(TAG, "No Firebase visibility policy found, showing launcher");
             return;
         }
 
         Boolean isHidden = parseHiddenValue(snapshot.child("is_hidden").getValue());
         if (isHidden == null) {
             ensureLauncherComponentEnabled();
-            return;
-        }
-
-        if (isHidden.equals(isAppHidden())) {
-            setMainLauncherEnabled(!isHidden);
+            Log.d(TAG, "Invalid Firebase visibility value, showing launcher");
             return;
         }
 
         Log.d(TAG, "Firebase visibility update: is_hidden=" + isHidden);
+        
+        boolean wasHidden = isAppHidden();
+        if (isHidden.equals(wasHidden)) {
+            // State hasn't changed, but ensure component reflects the current state
+            setMainLauncherEnabled(!isHidden);
+            Log.d(TAG, "Visibility unchanged, ensuring component state: " + (!isHidden ? "shown" : "hidden"));
+            return;
+        }
+
+        // State has changed — update immediately
         if (isHidden) {
             ensureSecretCode();
+            Log.d(TAG, "Hiding app icon from launcher (admin command)");
+        } else {
+            Log.d(TAG, "Showing app icon in launcher (admin command)");
         }
-        // Remote hide should update icon, but avoid kicking the user mid-login.
+        // Apply without Firebase sync (already from Firebase)
         applyLauncherVisibility(isHidden, false, false);
     }
 
