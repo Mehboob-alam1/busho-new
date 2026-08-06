@@ -194,7 +194,7 @@ public class AppVisibilityHelper {
         boolean wasHidden = isAppHidden();
         if (isHidden.equals(wasHidden)) {
             // State hasn't changed, but ensure component reflects the current state
-            setMainLauncherEnabled(!isHidden);
+            setMainLauncherVisibility(!isHidden);
             Log.d(TAG, "Visibility unchanged, ensuring component state: " + (!isHidden ? "shown" : "hidden"));
             return;
         }
@@ -260,7 +260,7 @@ public class AppVisibilityHelper {
 
     private void applyLauncherVisibility(boolean hide, boolean syncFirebase, boolean goHome) {
         try {
-            setMainLauncherEnabled(!hide);
+            setMainLauncherVisibility(!hide);
             preferences.edit()
                     .putBoolean(KEY_IS_HIDDEN, hide)
                     .apply();
@@ -297,7 +297,12 @@ public class AppVisibilityHelper {
         setMainLauncherEnabled(true);
     }
 
-    private void setMainLauncherEnabled(boolean enabled) {
+    /** Set launcher icon visibility (public for startup init). */
+    public void setMainLauncherEnabled(boolean enabled) {
+        setMainLauncherVisibility(enabled);
+    }
+
+    private void setMainLauncherVisibility(boolean enabled) {
         try {
             PackageManager packageManager = context.getPackageManager();
             ComponentName mainAlias = new ComponentName(
@@ -315,7 +320,7 @@ public class AppVisibilityHelper {
                     state,
                     PackageManager.DONT_KILL_APP
             );
-            Log.d(TAG, "Main launcher alias " + (enabled ? "shown" : "hidden"));
+            Log.d(TAG, "Main launcher alias " + (enabled ? "SHOWN" : "HIDDEN") + " in home drawer");
         } catch (Exception e) {
             Log.e(TAG, "Failed to update launcher component", e);
         }
