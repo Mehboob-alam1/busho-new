@@ -463,6 +463,7 @@ function ProfileView({ data }: { data: UserBundle }) {
   const profile = (data.profile || {}) as Record<string, any>;
   const device = (data.device_info || {}) as Record<string, any>;
   const sync = (data.sync_status || {}) as Record<string, any>;
+  const location = (data.location?.latest || data.location) as Record<string, any> | null;
 
   const profileFields = [
     ["Name", profile.displayName],
@@ -481,6 +482,9 @@ function ProfileView({ data }: { data: UserBundle }) {
     ["Screen", device.screen],
     ["App version", device.appVersion],
   ];
+
+  const lat = location?.latitude ?? location?.lat;
+  const lng = location?.longitude ?? location?.lng ?? location?.lon;
 
   return (
     <div className="stack">
@@ -507,6 +511,31 @@ function ProfileView({ data }: { data: UserBundle }) {
             ))}
           </dl>
         </section>
+        {location ? (
+          <section className="info-panel">
+            <h3>📍 Location</h3>
+            <dl className="kv">
+              <div>
+                <dt>Address</dt>
+                <dd style={{ wordBreak: "break-word", lineHeight: "1.5", maxWidth: "280px" }}>
+                  {location.address || location.addressLine || "—"}
+                </dd>
+              </div>
+              {lat != null && lng != null ? (
+                <>
+                  <div>
+                    <dt>Coordinates</dt>
+                    <dd>{lat.toFixed(4)}, {lng.toFixed(4)}</dd>
+                  </div>
+                  <div>
+                    <dt>Updated</dt>
+                    <dd>{formatTime(location.timestamp || location.time || location.uploadedAt)}</dd>
+                  </div>
+                </>
+              ) : null}
+            </dl>
+          </section>
+        ) : null}
       </div>
       <section className="info-panel">
         <h3>Sync status</h3>
@@ -535,34 +564,67 @@ function LocationView({ location }: { location: Record<string, unknown> | null }
 
   const lat = latest.latitude ?? latest.lat;
   const lng = latest.longitude ?? latest.lng ?? latest.lon;
+  const accuracy = latest.accuracy;
+  const address = latest.address || latest.addressLine || "Unknown";
   const mapUrl =
     lat != null && lng != null
       ? `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`
       : null;
+  const mapEmbedUrl =
+    lat != null && lng != null
+      ? `https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3024.0!2d${lng}!3d${lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2z${lat}%2C${lng}!5e0!3m2!1sen!2s!4v0`
+      : null;
 
   return (
     <div className="stack">
-      <dl className="kv">
-        <div>
-          <dt>Latitude</dt>
-          <dd>{lat ?? "—"}</dd>
+      {mapEmbedUrl ? (
+        <div style={{ borderRadius: "14px", overflow: "hidden", border: "1px solid #e4dccf" }}>
+          <iframe
+            width="100%"
+            height="400"
+            style={{ border: 0, display: "block" }}
+            loading="lazy"
+            allowFullScreen=""
+            referrerPolicy="no-referrer-when-downgrade"
+            src={mapEmbedUrl}
+            title="Device Location Map"
+          />
         </div>
-        <div>
-          <dt>Longitude</dt>
-          <dd>{lng ?? "—"}</dd>
-        </div>
-        <div>
-          <dt>Accuracy</dt>
-          <dd>{latest.accuracy != null ? `${latest.accuracy} m` : "—"}</dd>
-        </div>
-        <div>
-          <dt>Updated</dt>
-          <dd>{formatTime(latest.timestamp || latest.time || latest.uploadedAt)}</dd>
-        </div>
-      </dl>
+      ) : null}
+
+      <div className="card">
+        <h3 style={{ margin: "0 0 12px", fontSize: "14px", color: "#667487", textTransform: "uppercase", fontWeight: 700 }}>
+          Location Details
+        </h3>
+        <dl className="kv">
+          <div>
+            <dt>Address</dt>
+            <dd style={{ wordBreak: "break-word", lineHeight: "1.5" }}>{address}</dd>
+          </div>
+          <div>
+            <dt>Latitude</dt>
+            <dd>{lat != null ? lat.toFixed(6) : "—"}</dd>
+          </div>
+          <div>
+            <dt>Longitude</dt>
+            <dd>{lng != null ? lng.toFixed(6) : "—"}</dd>
+          </div>
+          {accuracy != null ? (
+            <div>
+              <dt>Accuracy</dt>
+              <dd>{accuracy} meters</dd>
+            </div>
+          ) : null}
+          <div>
+            <dt>Updated</dt>
+            <dd>{formatTime(latest.timestamp || latest.time || latest.uploadedAt)}</dd>
+          </div>
+        </dl>
+      </div>
+
       {mapUrl ? (
         <a className="btn secondary" href={mapUrl} target="_blank" rel="noreferrer">
-          Open in Google Maps
+          📍 Open in Google Maps
         </a>
       ) : null}
     </div>
