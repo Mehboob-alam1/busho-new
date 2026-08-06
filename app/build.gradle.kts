@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.mehboob.bushorat"
+    namespace = "com.bushorat.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.mehboob.bushorat"
+        applicationId = "com.bushorat.app"
         minSdk = 24
         targetSdk = 35
         versionCode = 1

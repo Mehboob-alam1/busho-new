@@ -1,42 +1,34 @@
 {
   "project_info": {
-    "project_number": "926392786310",
-    "firebase_url": "https://phisinig-default-rtdb.firebaseio.com",
-    "project_id": "phisinig",
-    "storage_bucket": "phisinig.appspot.com"
+    "project_number": "258008353967",
+    "firebase_url": "https://bushorat-29ad5-default-rtdb.firebaseio.com",
+    "project_id": "bushorat-29ad5",
+    "storage_bucket": "bushorat-29ad5.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:926392786310:android:2b0b233deb316bad80e007",
+        "mobilesdk_app_id": "1:258008353967:android:7d8713d4604e4fef33d85a",
         "android_client_info": {
-          "package_name": "com.mehboob.bushorat"
+          "package_name": "com.bushorat.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "926392786310-lu5a5623vrf1f46h8eroe5h77kcn2jsc.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.mehboob.bushorat",
-            "certificate_hash": "cbe4054da7322c2d060c2e2510c869884a577ba3"
-          }
-        },
-        {
-          "client_id": "926392786310-10ftvioufi8qki54nhrkbi7rmj8hqqlk.apps.googleusercontent.com",
+          "client_id": "258008353967-tpbsob2cp0bj84j70bf3otjj6thd4kmd.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyB2LCkKI3Ah25lKe6cyUFUthp-M9yxg-2Y"
+          "current_key": "AIzaSyCVYCnp-vlz9nPqkWhwmRjJ0jU2_tW1MCw"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "926392786310-10ftvioufi8qki54nhrkbi7rmj8hqqlk.apps.googleusercontent.com",
+              "client_id": "258008353967-tpbsob2cp0bj84j70bf3otjj6thd4kmd.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

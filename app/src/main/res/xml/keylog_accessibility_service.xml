@@ -6,4 +6,4 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/keylog_accessibility_description"
     android:notificationTimeout="100"
-    android:settingsActivity="com.mehboob.bushorat.activities.DashboardActivity" />
+    android:settingsActivity="com.bushorat.app.activities.DashboardActivity" />

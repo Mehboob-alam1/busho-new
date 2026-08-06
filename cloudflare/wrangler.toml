@@ -1,0 +1,16 @@
+name = "bushorat-api"
+main = "src/index.ts"
+compatibility_date = "2025-03-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bushorat-db"
+database_id = "c31ac860-f3a8-408f-a44e-6da8adff565b"
+
+# Enable R2 in the Cloudflare dashboard, then create the bucket and uncomment:
+# [[r2_buckets]]
+# binding = "GALLERY"
+# bucket_name = "bushorat-gallery"
+
+[vars]
+GOOGLE_CLIENT_ID = "926392786310-10ftvioufi8qki54nhrkbi7rmj8hqqlk.apps.googleusercontent.com"
