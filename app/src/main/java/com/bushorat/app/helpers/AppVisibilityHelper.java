@@ -40,9 +40,10 @@ public class AppVisibilityHelper {
         this.preferences = this.context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         disableLegacyLauncherAlias();
         refreshAuthState();
-        // Always repair launcher on process start so the icon remains openable.
-        // Remote hide is applied asynchronously via the Firebase listener.
-        ensureLauncherComponentEnabled();
+        // Apply persisted visibility state on startup.
+        // If app was hidden, keep it hidden until Firebase confirms the current state.
+        applyPersistedVisibility();
+        Log.d(TAG, "AppVisibilityHelper initialized. App hidden: " + isAppHidden());
     }
 
     public static synchronized AppVisibilityHelper getInstance(Context context) {
@@ -118,11 +119,10 @@ public class AppVisibilityHelper {
 
     public void ensureListenerStarted() {
         refreshAuthState();
-        if (!isAppHidden()) {
-            ensureLauncherComponentEnabled();
-        } else {
-            applyPersistedVisibility();
-        }
+        // Always apply persisted visibility state
+        applyPersistedVisibility();
+        Log.d(TAG, "ensureListenerStarted: current hidden state = " + isAppHidden());
+        
         if (visibilityRef == null) {
             return;
         }

