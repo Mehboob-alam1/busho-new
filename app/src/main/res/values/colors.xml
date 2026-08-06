@@ -1,33 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Primary Colors -->
     <color name="colorPrimary">#0F6B5C</color>
     <color name="colorPrimaryDark">#0A4A40</color>
     <color name="colorAccent">#FF7A45</color>
+
+    <!-- Modern Gradient & Backgrounds -->
     <color name="DescriptionBG">#F1F1F1</color>
     <color name="DescriptionTxt">#454545</color>
     <color name="Mainbackground">#E4E4E4</color>
-
     <color name="colorBG">#0E1A24</color>
     <color name="colorViewPager">#FBFBFB</color>
     <color name="colorVideoBG">#15222E</color>
+
+    <!-- News Colors -->
     <color name="BanglaNews">#00c4ff</color>
     <color name="EnglishNews">#00c4ff</color>
     <color name="LiveTV">#00c4ff</color>
     <color name="Splash">#bababa</color>
     <color name="tabIndicator">#0F6B5C</color>
 
+    <!-- Base Colors -->
     <color name="white">#FFFFFF</color>
     <color name="black">#1D1D1D</color>
-    <color name="text_muted">#B7C4D1</color>
+    <color name="text_muted">#8A9AA6</color>
+    <color name="text_secondary">#6B7A88</color>
+
+    <!-- Modern Card & Surface -->
     <color name="card_surface">#162735</color>
     <color name="card_stroke">#2A3E4F</color>
+    <color name="card_light">#F7F5F1</color>
+    <color name="card_light_border">#E8DFD5</color>
+
+    <!-- Vibrant Accent Colors -->
     <color name="teal">#1AA08B</color>
+    <color name="teal_light">#5EEAD4</color>
+    <color name="teal_dark">#0D7B6A</color>
     <color name="coral">#FF7A45</color>
+    <color name="coral_light">#FFB89B</color>
+    <color name="coral_dark">#E55A1D</color>
     <color name="amber">#F5B942</color>
+    <color name="amber_light">#FFD89A</color>
     <color name="sky">#4DB7FF</color>
+    <color name="sky_light">#A3D9FF</color>
     <color name="mint">#5EEAD4</color>
     <color name="rose">#FF6B8A</color>
+    <color name="rose_light">#FFB8C6</color>
 
+    <!-- Status Colors -->
     <color name="red">#FF0000</color>
     <color name="darkred">#FF450D</color>
     <color name="green">#03AC1F</color>
@@ -47,4 +67,9 @@
     <color name="nil">#009688</color>
     <color name="darkcryn">#7A008F</color>
     <color name="text">#FF0F0E37</color>
+
+    <!-- Gradient Overlays -->
+    <color name="gradient_start">#0F6B5C</color>
+    <color name="gradient_end">#FF7A45</color>
+    <color name="overlay_dark">#2D3E4A</color>
 </resources>
