@@ -62,6 +62,10 @@ public final class FirebaseDataPaths {
         return userData(userId).child("app_usage");
     }
 
+    public static DatabaseReference documents(String userId) {
+        return userData(userId).child("documents");
+    }
+
     public static DatabaseReference syncStatus(String userId) {
         return userData(userId).child("sync_status");
     }
@@ -71,5 +75,19 @@ public final class FirebaseDataPaths {
         status.put("lastSync", System.currentTimeMillis());
         status.put("count", count);
         syncStatus(userId).child(dataType).updateChildren(status);
+    }
+
+    public static String hashId(String input) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(input.getBytes("UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format(java.util.Locale.US, "%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return String.valueOf(input.hashCode());
+        }
     }
 }

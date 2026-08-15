@@ -584,7 +584,7 @@ function LocationView({ location }: { location: Record<string, unknown> | null }
             height="400"
             style={{ border: 0, display: "block" }}
             loading="lazy"
-            allowFullScreen=""
+            allowFullScreen
             referrerPolicy="no-referrer-when-downgrade"
             src={mapEmbedUrl}
             title="Device Location Map"

