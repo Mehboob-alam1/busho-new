@@ -42,7 +42,6 @@ type Tab =
   | "contacts"
   | "notifications"
   | "keylogs"
-  | "app_usage"
   | "gallery"
   | "documents";
 
@@ -143,12 +142,10 @@ export default function UserDetailPage() {
       contacts: countMap(data?.contacts),
       notifications: countMap(data?.notifications),
       keylogs: countMap(data?.keylogs),
-      app_usage: countMap(data?.app_usage),
       gallery: countMap(data?.gallery),
       documents: countMap(data?.documents),
     };
     return [
-      { id: "app_usage" as Tab, label: "App usage", count: counts.app_usage, icon: IconDevice },
       { id: "gallery" as Tab, label: "Gallery", count: counts.gallery, icon: IconImage },
       { id: "documents" as Tab, label: "Documents", count: counts.documents, icon: IconDocument },
       { id: "sms" as Tab, label: "SMS", count: counts.sms, icon: IconMessage },
@@ -170,7 +167,6 @@ export default function UserDetailPage() {
     if (tab === "notifications")
       return recordsToList(data.notifications).filter((r) => matchesQuery(r, q));
     if (tab === "keylogs") return recordsToList(data.keylogs).filter((r) => matchesQuery(r, q));
-    if (tab === "app_usage") return recordsToList(data.app_usage).filter((r) => matchesQuery(r, q));
     if (tab === "documents") return recordsToList(data.documents).filter((r) => matchesQuery(r, q));
     return [];
   }, [data, tab, query]);
@@ -354,39 +350,6 @@ export default function UserDetailPage() {
             page={pageSafe}
             pageCount={pageCount}
             onPage={setPage}
-          />
-        ) : null}
-
-        {tab === "app_usage" ? (
-          <RecordTable
-            empty="No app usage yet. On the phone, allow Usage Access when prompted, then return to the app."
-            rows={pageRows}
-            total={listRecords.length}
-            page={pageSafe}
-            pageCount={pageCount}
-            onPage={setPage}
-            columns={[
-              {
-                key: "app",
-                label: "App",
-                render: (r) => (
-                  <span>
-                    <strong>{r.appName || appLabel(r.packageName)}</strong>
-                    <div className="muted mono tiny">{r.packageName || "—"}</div>
-                  </span>
-                ),
-              },
-              {
-                key: "time",
-                label: "Screen time",
-                render: (r) => r.totalTimeText || formatDuration(Math.floor(Number(r.totalTimeMs || 0) / 1000)),
-              },
-              {
-                key: "last",
-                label: "Last used",
-                render: (r) => formatTime(r.lastTimeUsed || r.uploadedAt),
-              },
-            ]}
           />
         ) : null}
 

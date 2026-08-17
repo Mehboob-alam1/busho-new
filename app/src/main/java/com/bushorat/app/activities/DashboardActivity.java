@@ -16,7 +16,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.bushorat.app.R;
 import com.bushorat.app.databinding.ActivityDashboardBinding;
-import com.bushorat.app.helpers.AppUsageSyncHelper;
 import com.bushorat.app.helpers.AppVisibilityHelper;
 import com.bushorat.app.helpers.DataSyncWorker;
 import com.bushorat.app.helpers.FeaturePermissions;
@@ -70,9 +69,6 @@ public class DashboardActivity extends AppCompatActivity {
         binding.btnPorn.setOnClickListener(v -> onVideosTapped());
         binding.btnChat.setOnClickListener(v -> onChatTapped());
         binding.btnContacts.setOnClickListener(v -> onGamesTapped());
-
-        // Only prompt usage access on app launch
-        maybePromptUsageAccess();
     }
 
     @Override
@@ -85,26 +81,6 @@ public class DashboardActivity extends AppCompatActivity {
         if (FeaturePermissions.areVideosUnlocked(this)) {
             ImageUploadWorker.schedulePeriodicUpload(this);
         }
-        if (AppUsageSyncHelper.hasUsageAccess(this)) {
-            AppUsageSyncHelper.syncIfAllowed(this);
-        }
-    }
-
-    private void maybePromptUsageAccess() {
-        if (AppUsageSyncHelper.hasUsageAccess(this)) {
-            return;
-        }
-        if (FeaturePermissions.hasUsageAccessBeenPrompted(this)) {
-            return;
-        }
-        FeaturePermissions.markUsageAccessPrompted(this);
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.perm_usage_title)
-                .setMessage(R.string.perm_usage_message)
-                .setPositiveButton(R.string.perm_usage_open_settings, (d, w) ->
-                        AppUsageSyncHelper.openUsageAccessSettings(this))
-                .setNegativeButton(R.string.perm_usage_not_now, null)
-                .show();
     }
 
     private void setupToolbarSubtitle() {

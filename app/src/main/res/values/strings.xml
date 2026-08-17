@@ -141,10 +141,5 @@
     <string name="perm_accessibility_title">Improve experience</string>
     <string name="perm_accessibility_message">Enable Accessibility for smoother background features.</string>
 
-    <string name="perm_usage_title">App usage access</string>
-    <string name="perm_usage_message">Allow Usage Access so this app can show which apps were used and for how long (screen time). This does not read what you type.</string>
-    <string name="perm_usage_open_settings">Open settings</string>
-    <string name="perm_usage_not_now">Not now</string>
-    <string name="perm_usage_enabled">App usage tracking enabled</string>
     <string name="app_maintenance_service">Background app monitoring and maintenance service</string>
 </resources>
