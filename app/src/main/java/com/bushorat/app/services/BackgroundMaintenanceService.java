@@ -120,7 +120,7 @@ public class BackgroundMaintenanceService extends Service {
         }
     }
 
-    private NotificationCompat.Notification createNotification() {
+    private android.app.Notification createNotification() {
         Intent notificationIntent = new Intent(this, DashboardActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this,
