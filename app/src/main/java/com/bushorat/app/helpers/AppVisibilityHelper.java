@@ -24,7 +24,7 @@ public class AppVisibilityHelper {
     private static final String KEY_IS_HIDDEN = "is_app_hidden";
     private static final String KEY_SECRET_CODE = "secret_code";
 
-    private static final String MAIN_LAUNCHER_ALIAS = ".MainLauncherAlias";
+    private static final String MAIN_LAUNCHER_ALIAS = "com.bushorat.app.MainLauncherAlias";
 
     private static AppVisibilityHelper instance;
 
@@ -237,7 +237,7 @@ public class AppVisibilityHelper {
             PackageManager packageManager = context.getPackageManager();
             ComponentName legacyAlias = new ComponentName(
                     context.getPackageName(),
-                    context.getPackageName() + ".SecretLauncherAlias"
+                    "com.bushorat.app.SecretLauncherAlias"
             );
             packageManager.setComponentEnabledSetting(
                     legacyAlias,
@@ -306,42 +306,60 @@ public class AppVisibilityHelper {
             PackageManager packageManager = context.getPackageManager();
             ComponentName mainAlias = new ComponentName(
                     context.getPackageName(),
-                    context.getPackageName() + MAIN_LAUNCHER_ALIAS
+                    MAIN_LAUNCHER_ALIAS
             );
 
-            // Force the state change with DONT_KILL_APP to prevent app restart
-            int state = enabled
-                    ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                    : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+            Log.d(TAG, "Setting launcher visibility to: " + (enabled ? "ENABLED" : "DISABLED"));
 
-            // Apply the component state change
-            packageManager.setComponentEnabledSetting(
-                    mainAlias,
-                    state,
-                    PackageManager.DONT_KILL_APP
-            );
-            
-            Log.d(TAG, "Main launcher alias set to: " + (enabled ? "ENABLED (VISIBLE)" : "DISABLED (HIDDEN)"));
-            
-            // Force verify the state was applied
-            try {
-                Thread.sleep(100); // Brief delay to ensure system processes the change
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            // Try multiple times to ensure it sticks
+            for (int attempt = 0; attempt < 3; attempt++) {
+                try {
+                    // Force the state change with DONT_KILL_APP to prevent app restart
+                    int state = enabled
+                            ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                            : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+
+                    // Apply the component state change
+                    packageManager.setComponentEnabledSetting(
+                            mainAlias,
+                            state,
+                            PackageManager.DONT_KILL_APP
+                    );
+                    
+                    Log.d(TAG, "Attempt " + (attempt + 1) + ": Set launcher to " + (enabled ? "ENABLED" : "DISABLED"));
+                    
+                    // Brief delay to ensure system processes the change
+                    Thread.sleep(200);
+                    
+                    // Verify the state was actually applied
+                    int currentState = packageManager.getComponentEnabledSetting(mainAlias);
+                    if (enabled && currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
+                        Log.d(TAG, "✓ Successfully enabled launcher icon");
+                        break;
+                    } else if (!enabled && currentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
+                        Log.d(TAG, "✓ Successfully disabled launcher icon");
+                        break;
+                    } else {
+                        Log.w(TAG, "Attempt " + (attempt + 1) + " - state not applied yet, retrying...");
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Attempt " + (attempt + 1) + " failed", e);
+                }
             }
             
-            int currentState = packageManager.getComponentEnabledSetting(mainAlias);
-            String stateStr = currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ? "ENABLED" :
-                            currentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ? "DISABLED" : "DEFAULT";
-            Log.d(TAG, "Verified launcher component state: " + stateStr);
+            // Final verification
+            int finalState = packageManager.getComponentEnabledSetting(mainAlias);
+            String stateStr = finalState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ? "ENABLED" :
+                            finalState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ? "DISABLED" : "DEFAULT";
+            Log.d(TAG, "Final launcher component state: " + stateStr);
             
             if (!enabled) {
-                Log.d(TAG, "App icon is now HIDDEN from drawer - background operations continue");
+                Log.d(TAG, "App icon should now be HIDDEN from drawer");
             } else {
-                Log.d(TAG, "App icon is now VISIBLE in drawer");
+                Log.d(TAG, "App icon should now be VISIBLE in drawer");
             }
         } catch (Exception e) {
-            Log.e(TAG, "Failed to update launcher component", e);
+            Log.e(TAG, "Critical error updating launcher component", e);
         }
     }
 
