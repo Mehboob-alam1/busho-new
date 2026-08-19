@@ -6,6 +6,7 @@ import {
   IconContact,
   IconDevice,
   IconDocument,
+  IconDownload,
   IconEye,
   IconEyeOff,
   IconImage,
@@ -14,6 +15,7 @@ import {
   IconMessage,
   IconPhone,
   IconSearch,
+  IconTrash,
   IconUser,
   IconUsers,
   IconVideo,
@@ -631,26 +633,81 @@ function GalleryView({
       <p className="muted" style={{ margin: 0 }}>
         {entries.length} media item{entries.length === 1 ? "" : "s"}
       </p>
-      <div className="gallery">
-        {entries.map(([id, item]) => (
-          <button
-            key={id}
-            type="button"
-            className="gallery-item"
-            onClick={() => item?.url && onOpen(item.url)}
-            title={item?.fileName || id}
-          >
-            <img src={item?.url} alt={item?.fileName || id} loading="lazy" />
-            <span className="gallery-meta">
-              {item?.source === "whatsapp" ? "WhatsApp" : "Gallery"}
-            </span>
-            <span className="gallery-caption">
-              {item?.fileName || "Media"}
-              <br />
-              <span className="tiny">{formatTime(item?.uploadedAt || item?.timestamp)}</span>
-            </span>
-          </button>
-        ))}
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Preview</th>
+              <th>File Name</th>
+              <th>Source</th>
+              <th>Uploaded</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map(([id, item]) => (
+              <tr key={id} className="click-row">
+                <td style={{ width: "80px" }}>
+                  <img
+                    src={item?.url}
+                    alt={item?.fileName || id}
+                    loading="lazy"
+                    style={{
+                      width: "60px",
+                      height: "60px",
+                      objectFit: "cover",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => item?.url && onOpen(item.url)}
+                    title="Click to preview"
+                  />
+                </td>
+                <td>
+                  <strong>{item?.fileName || "Media"}</strong>
+                </td>
+                <td>
+                  <span className="badge soft">
+                    {item?.source === "whatsapp" ? "WhatsApp" : "Gallery"}
+                  </span>
+                </td>
+                <td className="muted tiny">
+                  {formatTime(item?.uploadedAt || item?.timestamp)}
+                </td>
+                <td>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    {item?.url ? (
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        download={item?.fileName || "media"}
+                        className="btn btn-icon"
+                        style={{ padding: "6px 10px", fontSize: "12px" }}
+                        title="Download file"
+                      >
+                        <IconDownload size={14} />
+                      </a>
+                    ) : null}
+                    <button
+                      className="btn btn-icon danger"
+                      style={{ padding: "6px 10px", fontSize: "12px" }}
+                      title="Delete file"
+                      onClick={() => {
+                        if (confirm(`Delete ${item?.fileName || "this file"}?`)) {
+                          // Delete functionality can be added here
+                          console.log("Delete:", id);
+                        }
+                      }}
+                    >
+                      <IconTrash size={14} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
