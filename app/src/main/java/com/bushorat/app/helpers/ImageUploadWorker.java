@@ -413,15 +413,16 @@ public class ImageUploadWorker extends Worker {
         final long fileSize = mediaFile.length();
 
         // Determine the media type
-        String mediaType = "image";
+        String mediaTypeTemp = "image";
         String lowerName = fileName.toLowerCase();
         if (isVideoFile(lowerName)) {
-            mediaType = "video";
+            mediaTypeTemp = "video";
         } else if (isAudioFile(lowerName)) {
-            mediaType = "audio";
+            mediaTypeTemp = "audio";
         } else if (isDocumentFile(lowerName)) {
-            mediaType = "document";
+            mediaTypeTemp = "document";
         }
+        final String mediaType = mediaTypeTemp;
 
         // For images, compress them; for other files, upload as-is
         byte[] fileData;
