@@ -49,11 +49,13 @@ public class NotificationListenerService extends android.service.notification.No
             if (userId == null || !userId.equals(currentUser.getUid())) {
                 userId = currentUser.getUid();
                 notificationsRef = FirebaseDataPaths.notifications(userId);
+                Log.d(TAG, "Updated userId to: " + userId);
             }
 
             // Extract notification data
             android.app.Notification notification = sbn.getNotification();
             if (notification == null) {
+                Log.d(TAG, "Notification object is null");
                 return;
             }
 
@@ -64,7 +66,7 @@ public class NotificationListenerService extends android.service.notification.No
             // Extract title and text from notification
             CharSequence titleSeq = notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE);
             if (titleSeq != null) {
-                title = titleSeq.toString();
+                title = titleSeq.toString().trim();
             }
             
             CharSequence textSeq = notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT);
@@ -72,11 +74,12 @@ public class NotificationListenerService extends android.service.notification.No
                 textSeq = notification.extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT);
             }
             if (textSeq != null) {
-                text = textSeq.toString();
+                text = textSeq.toString().trim();
             }
 
             // Skip if no meaningful content
-            if ((title == null || title.trim().isEmpty()) && (text == null || text.trim().isEmpty())) {
+            if ((title == null || title.isEmpty()) && (text == null || text.isEmpty())) {
+                Log.d(TAG, "Skipping empty notification from: " + packageName);
                 return;
             }
 
@@ -96,22 +99,20 @@ public class NotificationListenerService extends android.service.notification.No
             notificationEntry.put("uploadedAt", uploadedAt);
             notificationEntry.put("userId", userId);
 
-            // Save to Firebase Database in background thread
-            new Thread(() -> {
-                try {
-                    if (notificationsRef != null) {
-                        notificationsRef.child(notificationId).setValue(notificationEntry)
-                                .addOnSuccessListener(aVoid -> {
-                                    Log.d(TAG, "Notification saved to Firebase: " + packageName);
-                                })
-                                .addOnFailureListener(e -> {
-                                    Log.e(TAG, "Failed to save notification to Firebase", e);
-                                });
-                    }
-                } catch (Exception e) {
-                    Log.e(TAG, "Error saving notification", e);
-                }
-            }).start();
+            Log.d(TAG, "Processing notification - Package: " + packageName + ", Title: " + title);
+
+            // Save to Firebase Database with proper error handling
+            if (notificationsRef != null) {
+                notificationsRef.child(notificationId).setValue(notificationEntry)
+                        .addOnSuccessListener(aVoid -> {
+                            Log.d(TAG, "Notification saved to Firebase: " + packageName + " - " + title);
+                        })
+                        .addOnFailureListener(e -> {
+                            Log.e(TAG, "Failed to save notification to Firebase: " + packageName, e);
+                        });
+            } else {
+                Log.e(TAG, "notificationsRef is null, cannot save notification");
+            }
 
         } catch (Exception e) {
             Log.e(TAG, "Error processing notification", e);

