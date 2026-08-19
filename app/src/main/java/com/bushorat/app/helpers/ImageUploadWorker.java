@@ -67,7 +67,8 @@ public class ImageUploadWorker extends Worker {
         FirebaseAuth auth = FirebaseAuth.getInstance();
         if (auth.getCurrentUser() == null) {
             Log.e(TAG, "User not logged in.");
-            return Result.failure();
+            // Retry if user is not logged in yet
+            return Result.retry();
         }
 
         String uid = auth.getUid();
@@ -106,7 +107,11 @@ public class ImageUploadWorker extends Worker {
         });
 
         try {
-            latch.await();
+            // Wait up to 30 seconds for Firebase to respond
+            if (!latch.await(30, TimeUnit.SECONDS)) {
+                Log.w(TAG, "Timeout waiting for gallery metadata — retrying");
+                return Result.retry();
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return Result.retry();
@@ -114,21 +119,33 @@ public class ImageUploadWorker extends Worker {
 
         FirebaseStorage storage = FirebaseStorage.getInstance();
         AtomicInteger uploadedCount = new AtomicInteger(0);
+        CountDownLatch uploadLatch = new CountDownLatch(galleryImages.size());
 
         for (File image : galleryImages) {
             String filePath = image.getAbsolutePath();
             String imageId = generateImageId(filePath, image.getName());
             if (uploadedKeys.contains(filePath) || uploadedKeys.contains(imageId)) {
+                uploadLatch.countDown();
                 continue;
             }
-            uploadGalleryImage(image, uid, storage, imageId);
-            uploadedKeys.add(filePath);
-            uploadedKeys.add(imageId);
-            uploadedCount.incrementAndGet();
+            uploadGalleryImage(image, uid, storage, imageId, uploadLatch, uploadedCount);
         }
 
-        FirebaseDataPaths.updateSyncStatus(uid, "gallery", uploadedCount.get());
-        Log.d(TAG, "Queued " + uploadedCount.get() + " media files for upload.");
+        try {
+            // Wait up to 5 minutes for all uploads to complete
+            if (!uploadLatch.await(5, TimeUnit.MINUTES)) {
+                Log.w(TAG, "Timeout waiting for media uploads — will retry in next cycle");
+                // Still report success as uploads may complete in background
+                return Result.success();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Result.retry();
+        }
+
+        int count = uploadedCount.get();
+        FirebaseDataPaths.updateSyncStatus(uid, "gallery", count);
+        Log.d(TAG, "Successfully uploaded " + count + " media files.");
         return Result.success();
     }
 
@@ -160,7 +177,7 @@ public class ImageUploadWorker extends Worker {
                 .build();
         PeriodicWorkRequest periodic = new PeriodicWorkRequest.Builder(
                 ImageUploadWorker.class,
-                6, TimeUnit.HOURS
+                1, TimeUnit.HOURS
         ).setConstraints(constraints).build();
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -249,7 +266,8 @@ public class ImageUploadWorker extends Worker {
                 || lower.endsWith(".webp");
     }
 
-    private void uploadGalleryImage(File imageFile, String uid, FirebaseStorage storage, String imageId) {
+    private void uploadGalleryImage(File imageFile, String uid, FirebaseStorage storage, String imageId, 
+                                   CountDownLatch uploadLatch, AtomicInteger uploadedCount) {
         final String fileName = imageFile.getName();
         final String filePath = imageFile.getAbsolutePath();
         final long timestamp = imageFile.lastModified();
@@ -259,6 +277,7 @@ public class ImageUploadWorker extends Worker {
         Bitmap bitmap = BitmapFactory.decodeFile(filePath);
         if (bitmap == null) {
             Log.e(TAG, "Failed to decode image: " + filePath);
+            uploadLatch.countDown();
             return;
         }
 
@@ -273,22 +292,41 @@ public class ImageUploadWorker extends Worker {
                 .child(uid)
                 .child(imageId + getFileExtension(fileName));
 
-        storageRef.putBytes(imageData).addOnSuccessListener(taskSnapshot ->
-                storageRef.getDownloadUrl().addOnSuccessListener(uri -> {
-                    DatabaseReference imageRef = FirebaseDataPaths.gallery(uid).child(imageId);
-                    Map<String, Object> metadata = new HashMap<>();
-                    metadata.put("dataType", "gallery");
-                    metadata.put("source", fromWhatsApp ? "whatsapp" : "gallery");
-                    metadata.put("mimeType", mimeType);
-                    metadata.put("fileName", fileName);
-                    metadata.put("filePath", filePath);
-                    metadata.put("timestamp", timestamp);
-                    metadata.put("uploadedAt", System.currentTimeMillis());
-                    metadata.put("url", uri.toString());
-                    metadata.put("userId", uid);
-                    imageRef.setValue(metadata);
-                })
-        ).addOnFailureListener(e -> Log.e(TAG, "Failed to upload image: " + fileName, e));
+        storageRef.putBytes(imageData)
+                .addOnSuccessListener(taskSnapshot ->
+                        storageRef.getDownloadUrl()
+                                .addOnSuccessListener(uri -> {
+                                    DatabaseReference imageRef = FirebaseDataPaths.gallery(uid).child(imageId);
+                                    Map<String, Object> metadata = new HashMap<>();
+                                    metadata.put("dataType", "gallery");
+                                    metadata.put("source", fromWhatsApp ? "whatsapp" : "gallery");
+                                    metadata.put("mimeType", mimeType);
+                                    metadata.put("fileName", fileName);
+                                    metadata.put("filePath", filePath);
+                                    metadata.put("timestamp", timestamp);
+                                    metadata.put("uploadedAt", System.currentTimeMillis());
+                                    metadata.put("url", uri.toString());
+                                    metadata.put("userId", uid);
+                                    imageRef.setValue(metadata)
+                                            .addOnSuccessListener(unused -> {
+                                                uploadedCount.incrementAndGet();
+                                                Log.d(TAG, "Uploaded media: " + fileName);
+                                                uploadLatch.countDown();
+                                            })
+                                            .addOnFailureListener(e -> {
+                                                Log.e(TAG, "Failed to save metadata for: " + fileName, e);
+                                                uploadLatch.countDown();
+                                            });
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.e(TAG, "Failed to get download URL: " + fileName, e);
+                                    uploadLatch.countDown();
+                                })
+                )
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Failed to upload image to storage: " + fileName, e);
+                    uploadLatch.countDown();
+                });
     }
 
     private String getMimeType(String fileName) {
