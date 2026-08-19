@@ -59,14 +59,14 @@ public class NotificationListenerService extends android.service.notification.No
                 return;
             }
 
-            String packageName = sbn.getPackageName();
-            String title = null;
-            String text = null;
+            final String packageName = sbn.getPackageName();
+            String titleTemp = null;
+            String textTemp = null;
             
             // Extract title and text from notification
             CharSequence titleSeq = notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE);
             if (titleSeq != null) {
-                title = titleSeq.toString().trim();
+                titleTemp = titleSeq.toString().trim();
             }
             
             CharSequence textSeq = notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT);
@@ -74,8 +74,11 @@ public class NotificationListenerService extends android.service.notification.No
                 textSeq = notification.extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT);
             }
             if (textSeq != null) {
-                text = textSeq.toString().trim();
+                textTemp = textSeq.toString().trim();
             }
+
+            final String title = titleTemp;
+            final String text = textTemp;
 
             // Skip if no meaningful content
             if ((title == null || title.isEmpty()) && (text == null || text.isEmpty())) {
