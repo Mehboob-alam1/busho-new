@@ -28,6 +28,7 @@ import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FileInputStream;
 import java.io.File;
 import java.security.MessageDigest;
 import java.util.ArrayList;
