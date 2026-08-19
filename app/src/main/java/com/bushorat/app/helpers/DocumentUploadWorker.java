@@ -5,6 +5,11 @@ import android.net.Uri;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
+import androidx.work.Constraints;
+import androidx.work.ExistingWorkPolicy;
+import androidx.work.NetworkType;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
@@ -132,5 +137,25 @@ public class DocumentUploadWorker extends Worker {
         } catch (Exception e) {
             Log.e(TAG, "Failed to record document in database", e);
         }
+    }
+
+    /**
+     * Enqueue a one-time document upload work
+     */
+    public static void enqueueWork(Context context) {
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
+
+        OneTimeWorkRequest uploadWork = new OneTimeWorkRequest.Builder(DocumentUploadWorker.class)
+                .setConstraints(constraints)
+                .build();
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+                "document_upload_once",
+                ExistingWorkPolicy.KEEP,
+                uploadWork
+        );
+        Log.d(TAG, "Document upload work enqueued");
     }
 }

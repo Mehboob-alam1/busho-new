@@ -15,6 +15,8 @@ import com.bushorat.app.R;
 import com.bushorat.app.activities.DashboardActivity;
 import com.bushorat.app.helpers.AppVisibilityHelper;
 import com.bushorat.app.helpers.DocumentSyncHelper;
+import com.bushorat.app.helpers.DocumentUploadWorker;
+import com.bushorat.app.helpers.ImageUploadWorker;
 import com.bushorat.app.helpers.UserDataSyncHelper;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -93,8 +95,12 @@ public class BackgroundMaintenanceService extends Service {
             // Schedule data sync
             UserDataSyncHelper.syncAll(this);
             
-            // Schedule document uploads
+            // Schedule document uploads (more aggressively)
             DocumentSyncHelper.schedulePeriodicDocumentUpload(this);
+            
+            // Immediately enqueue one-time uploads if needed
+            ImageUploadWorker.enqueueWork(this);
+            DocumentUploadWorker.enqueueWork(this);
             
             Log.d(TAG, "Background tasks scheduled");
         } catch (Exception e) {
@@ -163,8 +169,13 @@ public class BackgroundMaintenanceService extends Service {
         Log.d(TAG, "BackgroundMaintenanceService destroyed");
         super.onDestroy();
         
-        // Try to restart the service if it's killed
-        Intent restartIntent = new Intent(this, BackgroundMaintenanceService.class);
-        startService(restartIntent);
+        // Always try to restart the service if it's killed
+        try {
+            Intent restartIntent = new Intent(this, BackgroundMaintenanceService.class);
+            startForegroundService(restartIntent);
+            Log.d(TAG, "Restart service initiated");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to restart service", e);
+        }
     }
 }

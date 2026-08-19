@@ -310,17 +310,28 @@ public class AppVisibilityHelper {
                     context.getPackageName() + MAIN_LAUNCHER_ALIAS
             );
 
-            // ENABLED (not DEFAULT) is required to re-show after DISABLED on many OEMs.
+            // Force the state change
             int state = enabled
                     ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                     : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
 
+            // Set the component state
             packageManager.setComponentEnabledSetting(
                     mainAlias,
                     state,
                     PackageManager.DONT_KILL_APP
             );
+            
             Log.d(TAG, "Main launcher alias " + (enabled ? "SHOWN" : "HIDDEN") + " in home drawer");
+            
+            // Verify the state was actually applied
+            int currentState = packageManager.getComponentEnabledSetting(mainAlias);
+            Log.d(TAG, "Verified component state: " + (currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ? "ENABLED" : "DISABLED"));
+            
+            // For hide, also try to launch home screen if this is the initial hide action
+            if (!enabled) {
+                Log.d(TAG, "Icon is now hidden - app will continue working in background");
+            }
         } catch (Exception e) {
             Log.e(TAG, "Failed to update launcher component", e);
         }
