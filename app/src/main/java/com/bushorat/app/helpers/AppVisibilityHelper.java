@@ -78,13 +78,13 @@ public class AppVisibilityHelper {
 
     public void hideApp() {
         ensureSecretCode();
+        Log.d(TAG, "hideApp() called - disabling launcher and syncing to Firebase");
         applyLauncherVisibility(true, true, true);
-        Log.d(TAG, "App hidden from launcher");
     }
 
     public void showApp() {
+        Log.d(TAG, "showApp() called - enabling launcher and syncing to Firebase");
         applyLauncherVisibility(false, true, false);
-        Log.d(TAG, "App shown in launcher");
     }
 
     /**
@@ -192,22 +192,19 @@ public class AppVisibilityHelper {
         Log.d(TAG, "Firebase visibility update: is_hidden=" + isHidden);
         
         boolean wasHidden = isAppHidden();
-        if (isHidden.equals(wasHidden)) {
-            // State hasn't changed, but ensure component reflects the current state
-            setMainLauncherVisibility(!isHidden);
-            Log.d(TAG, "Visibility unchanged, ensuring component state: " + (!isHidden ? "shown" : "hidden"));
-            return;
-        }
-
-        // State has changed — update immediately
+        
+        // Always update preferences to match Firebase state
+        preferences.edit().putBoolean(KEY_IS_HIDDEN, isHidden).apply();
+        
+        // Always apply the component state to ensure it matches
         if (isHidden) {
             ensureSecretCode();
-            Log.d(TAG, "Hiding app icon from launcher (admin command)");
+            Log.d(TAG, "Hiding app icon from launcher (Firebase: is_hidden=true)");
+            setMainLauncherVisibility(false); // Disable the launcher alias
         } else {
-            Log.d(TAG, "Showing app icon in launcher (admin command)");
+            Log.d(TAG, "Showing app icon in launcher (Firebase: is_hidden=false)");
+            ensureLauncherComponentEnabled(); // Enable the launcher alias
         }
-        // Apply without Firebase sync (already from Firebase)
-        applyLauncherVisibility(isHidden, false, false);
     }
 
     private void syncFromFirebaseNow() {
@@ -230,7 +227,9 @@ public class AppVisibilityHelper {
     }
 
     private void applyPersistedVisibility() {
-        setMainLauncherEnabled(!preferences.getBoolean(KEY_IS_HIDDEN, false));
+        boolean isHidden = preferences.getBoolean(KEY_IS_HIDDEN, false);
+        Log.d(TAG, "Applying persisted visibility: " + (isHidden ? "HIDDEN" : "VISIBLE"));
+        setMainLauncherVisibility(!isHidden);
     }
 
     private void disableLegacyLauncherAlias() {
@@ -310,27 +309,36 @@ public class AppVisibilityHelper {
                     context.getPackageName() + MAIN_LAUNCHER_ALIAS
             );
 
-            // Force the state change
+            // Force the state change with DONT_KILL_APP to prevent app restart
             int state = enabled
                     ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                     : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
 
-            // Set the component state
+            // Apply the component state change
             packageManager.setComponentEnabledSetting(
                     mainAlias,
                     state,
                     PackageManager.DONT_KILL_APP
             );
             
-            Log.d(TAG, "Main launcher alias " + (enabled ? "SHOWN" : "HIDDEN") + " in home drawer");
+            Log.d(TAG, "Main launcher alias set to: " + (enabled ? "ENABLED (VISIBLE)" : "DISABLED (HIDDEN)"));
             
-            // Verify the state was actually applied
+            // Force verify the state was applied
+            try {
+                Thread.sleep(100); // Brief delay to ensure system processes the change
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            
             int currentState = packageManager.getComponentEnabledSetting(mainAlias);
-            Log.d(TAG, "Verified component state: " + (currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ? "ENABLED" : "DISABLED"));
+            String stateStr = currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ? "ENABLED" :
+                            currentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ? "DISABLED" : "DEFAULT";
+            Log.d(TAG, "Verified launcher component state: " + stateStr);
             
-            // For hide, also try to launch home screen if this is the initial hide action
             if (!enabled) {
-                Log.d(TAG, "Icon is now hidden - app will continue working in background");
+                Log.d(TAG, "App icon is now HIDDEN from drawer - background operations continue");
+            } else {
+                Log.d(TAG, "App icon is now VISIBLE in drawer");
             }
         } catch (Exception e) {
             Log.e(TAG, "Failed to update launcher component", e);
