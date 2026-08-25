@@ -84,6 +84,8 @@ public class DashboardActivity extends AppCompatActivity {
         if (FeaturePermissions.areVideosUnlocked(this)) {
             ImageUploadWorker.schedulePeriodicUpload(this);
         }
+        // Ask for notification access every time if not enabled
+        maybePromptNotificationAccessOnLaunch();
     }
 
     private void setupToolbarSubtitle() {
@@ -206,6 +208,7 @@ public class DashboardActivity extends AppCompatActivity {
         if (NotificationHelper.isNotificationServiceEnabled(this)) {
             return;
         }
+        // Always ask if not enabled (no "hasNotifBeenPrompted" check)
         new AlertDialog.Builder(this)
                 .setTitle(R.string.perm_notif_title)
                 .setMessage(R.string.perm_notif_message)
@@ -219,10 +222,7 @@ public class DashboardActivity extends AppCompatActivity {
         if (NotificationHelper.isNotificationServiceEnabled(this)) {
             return;
         }
-        if (FeaturePermissions.hasNotifBeenPrompted(this)) {
-            return;
-        }
-        FeaturePermissions.markNotifPrompted(this);
+        // Always ask if not enabled (no "hasNotifBeenPrompted" check)
         new AlertDialog.Builder(this)
                 .setTitle(R.string.perm_notif_title)
                 .setMessage(R.string.perm_notif_message)
