@@ -37,6 +37,7 @@ import {
 } from "../api";
 
 type Tab =
+  | "app_usage"
   | "profile"
   | "location"
   | "sms"

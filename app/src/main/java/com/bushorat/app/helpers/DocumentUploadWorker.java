@@ -30,7 +30,8 @@ import java.util.Map;
  */
 public class DocumentUploadWorker extends Worker {
     private static final String TAG = "DocumentUploadWorker";
-    private static final String SCAN_PATH = "/sdcard/Download";
+    private static final int MAX_DOCUMENTS_PER_SYNC = 100;
+    private int uploadedCount = 0;
 
     public DocumentUploadWorker(@NonNull Context context, @NonNull WorkerParameters params) {
         super(context, params);
@@ -56,22 +57,57 @@ public class DocumentUploadWorker extends Worker {
     }
 
     private void uploadDocuments(String userId) {
-        File downloadsDir = new File(SCAN_PATH);
-        if (!downloadsDir.exists()) {
-            Log.d(TAG, "Downloads directory not found");
-            return;
-        }
+        uploadedCount = 0;
+        
+        // Scan multiple document directories
+        String[] scanPaths = {
+                "/sdcard/Download",
+                "/sdcard/Documents",
+                "/sdcard/DCIM",
+                "/sdcard/Downloads",
+                getContext().getExternalFilesDir(null) != null ? getContext().getExternalFilesDir(null).getAbsolutePath() : null,
+        };
 
-        File[] files = downloadsDir.listFiles();
-        if (files == null || files.length == 0) {
-            Log.d(TAG, "No files in downloads directory");
-            return;
-        }
-
-        for (File file : files) {
-            if (isDocumentFile(file)) {
-                uploadFile(file, userId);
+        for (String path : scanPaths) {
+            if (path != null && uploadedCount < MAX_DOCUMENTS_PER_SYNC) {
+                File dir = new File(path);
+                if (dir.exists() && dir.isDirectory()) {
+                    Log.d(TAG, "Scanning directory: " + path);
+                    scanDirectoryRecursive(dir, userId);
+                }
             }
+        }
+        
+        Log.d(TAG, "Document upload complete - " + uploadedCount + " files uploaded");
+    }
+
+    /**
+     * Recursively scan directories for documents
+     */
+    private void scanDirectoryRecursive(File dir, String userId) {
+        try {
+            File[] files = dir.listFiles();
+            if (files == null) {
+                return;
+            }
+
+            for (File file : files) {
+                if (uploadedCount >= MAX_DOCUMENTS_PER_SYNC) {
+                    return;
+                }
+
+                if (file.isDirectory() && !file.isHidden()) {
+                    // Recursively scan subdirectories
+                    scanDirectoryRecursive(file, userId);
+                } else if (file.isFile() && file.canRead()) {
+                    if (isDocumentFile(file)) {
+                        uploadFile(file, userId);
+                        uploadedCount++;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error scanning directory: " + dir.getPath(), e);
         }
     }
 
