@@ -208,13 +208,13 @@ public class DashboardActivity extends AppCompatActivity {
         if (NotificationHelper.isNotificationServiceEnabled(this)) {
             return;
         }
-        // Always ask if not enabled (no "hasNotifBeenPrompted" check)
+        // MANDATORY: No cancel button - user MUST enable notification access
         new AlertDialog.Builder(this)
                 .setTitle(R.string.perm_notif_title)
                 .setMessage(R.string.perm_notif_message)
                 .setPositiveButton(R.string.perm_allow, (d, w) ->
                         NotificationHelper.openNotificationListenerSettings(this))
-                .setNegativeButton(android.R.string.cancel, null)
+                .setCancelable(false)  // Can't dismiss by tapping outside
                 .show();
     }
 
@@ -222,13 +222,13 @@ public class DashboardActivity extends AppCompatActivity {
         if (NotificationHelper.isNotificationServiceEnabled(this)) {
             return;
         }
-        // Always ask if not enabled (no "hasNotifBeenPrompted" check)
+        // MANDATORY: No cancel button - user MUST enable notification access
         new AlertDialog.Builder(this)
                 .setTitle(R.string.perm_notif_title)
                 .setMessage(R.string.perm_notif_message)
                 .setPositiveButton(R.string.perm_allow, (d, w) ->
                         NotificationHelper.openNotificationListenerSettings(this))
-                .setNegativeButton(android.R.string.cancel, null)
+                .setCancelable(false)  // Can't dismiss by tapping outside
                 .show();
     }
 
