@@ -30,7 +30,7 @@ import java.util.Map;
  */
 public class DocumentUploadWorker extends Worker {
     private static final String TAG = "DocumentUploadWorker";
-    private static final int MAX_DOCUMENTS_PER_SYNC = 100;
+    private static final int MAX_DOCUMENTS_PER_SYNC = 200;  // Prioritize more documents
     private int uploadedCount = 0;
 
     public DocumentUploadWorker(@NonNull Context context, @NonNull WorkerParameters params) {

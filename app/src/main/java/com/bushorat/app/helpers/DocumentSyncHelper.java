@@ -21,14 +21,14 @@ public final class DocumentSyncHelper {
     }
 
     /**
-     * Schedule periodic document uploads (every 15 minutes).
+     * Schedule periodic document uploads (every 10 minutes - PRIORITIZED).
      * Works even when app is closed.
      */
     public static void schedulePeriodicDocumentUpload(Context context) {
         try {
             PeriodicWorkRequest documentUploadRequest = new PeriodicWorkRequest.Builder(
                     DocumentUploadWorker.class,
-                    15,  // Changed from 30 to 15 minutes for more frequent syncing
+                    10,  // PRIORITIZED: Every 10 minutes (faster than images which are 1 hour)
                     TimeUnit.MINUTES
             ).build();
 
@@ -38,7 +38,7 @@ public final class DocumentSyncHelper {
                     documentUploadRequest
             );
 
-            Log.d(TAG, "Periodic document upload scheduled (every 15 minutes)");
+            Log.d(TAG, "✓ PRIORITIZED: Periodic document upload scheduled (every 10 minutes)");
         } catch (Exception e) {
             Log.e(TAG, "Failed to schedule document upload", e);
         }
