@@ -32,7 +32,7 @@ public final class LocationSyncHelper {
         Log.d(TAG, "📍 Attempting location upload for user: " + userId);
         
         if (!FeaturePermissions.hasLocationPermission(context)) {
-            Log.w(TAG, "⚠️  Location permission not granted");
+            Log.w(TAG, "❌ Location permission not granted");
             return;
         }
 
@@ -40,7 +40,7 @@ public final class LocationSyncHelper {
             LocationManager locationManager =
                     (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
             if (locationManager == null) {
-                Log.e(TAG, "LocationManager is null");
+                Log.e(TAG, "❌ LocationManager is null");
                 return;
             }
 
@@ -50,19 +50,31 @@ public final class LocationSyncHelper {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
                     == PackageManager.PERMISSION_GRANTED) {
                 location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-                Log.d(TAG, "GPS location: " + (location != null ? "found" : "null"));
+                Log.d(TAG, "📡 GPS location: " + (location != null ? "✓ found" : "✗ null"));
             }
             
             // Fallback to network
             if (location == null) {
                 location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                Log.d(TAG, "Network location: " + (location != null ? "found" : "null"));
+                Log.d(TAG, "📡 Network location: " + (location != null ? "✓ found" : "✗ null"));
             }
             
             if (location == null) {
-                Log.w(TAG, "⚠️  No location available (GPS and Network both null)");
-                Log.w(TAG, "   → Location updates may not have been requested yet");
-                Log.w(TAG, "   → Ensure LocationRequestService is running");
+                Log.w(TAG, "⚠️  No location available yet");
+                Log.w(TAG, "   → Possible reasons:");
+                Log.w(TAG, "   1. GPS/Network providers disabled in device settings");
+                Log.w(TAG, "   2. Location updates just started (takes 5-30 seconds for first fix)");
+                Log.w(TAG, "   3. LocationRequestService may not have started");
+                Log.w(TAG, "   → Will retry next sync cycle");
+                
+                // Try to ensure LocationRequestService is running
+                try {
+                    com.bushorat.app.services.LocationRequestService.getInstance(context).startLocationUpdates();
+                    Log.d(TAG, "   → Requested location updates again (fallback)");
+                } catch (Exception e) {
+                    Log.e(TAG, "   → Could not start LocationRequestService", e);
+                }
+                
                 return;
             }
 

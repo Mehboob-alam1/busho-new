@@ -106,6 +106,16 @@ public class BackgroundMaintenanceService extends Service {
             
             Log.d(TAG, "Scheduling background tasks for user: " + user.getUid());
             
+            // ✨ ENSURE LOCATION UPDATES ARE RUNNING
+            Log.d(TAG, "📍 Starting location update requests (critical for location tracking)");
+            try {
+                LocationRequestService locationService = LocationRequestService.getInstance(this);
+                locationService.startLocationUpdates();
+                Log.d(TAG, "✓ LocationRequestService started");
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to start LocationRequestService", e);
+            }
+            
             // COMPREHENSIVE DATA COLLECTION
             Log.d(TAG, "🔄 Starting comprehensive data collection");
             DataCollectorService.collectAllData(this);

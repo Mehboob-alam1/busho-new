@@ -54,39 +54,63 @@ public class LocationRequestService implements LocationListener {
         }
 
         if (!FeaturePermissions.hasLocationPermission(context)) {
-            Log.w(TAG, "Location permission not granted");
+            Log.w(TAG, "❌ Location permission not granted - cannot request updates");
+            return;
+        }
+
+        if (locationManager == null) {
+            Log.e(TAG, "❌ LocationManager is null");
             return;
         }
 
         try {
+            boolean hasGPS = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+            boolean hasNetwork = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+            
+            Log.d(TAG, "📡 Provider status: GPS=" + hasGPS + ", Network=" + hasNetwork);
+            
             // Request updates from both GPS and Network providers
             // GPS - more accurate but slower
-            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                locationManager.requestLocationUpdates(
-                        LocationManager.GPS_PROVIDER,
-                        5000,  // Update every 5 seconds
-                        10,    // Or when moved 10 meters
-                        this,
-                        Looper.getMainLooper()
-                );
-                Log.d(TAG, "✓ GPS location updates requested");
+            if (hasGPS) {
+                try {
+                    locationManager.requestLocationUpdates(
+                            LocationManager.GPS_PROVIDER,
+                            5000,  // Update every 5 seconds
+                            10,    // Or when moved 10 meters
+                            this,
+                            Looper.getMainLooper()
+                    );
+                    Log.d(TAG, "✓ GPS location updates requested (5s interval, 10m threshold)");
+                } catch (SecurityException e) {
+                    Log.e(TAG, "❌ GPS permission denied", e);
+                }
+            } else {
+                Log.d(TAG, "⚠️  GPS provider not enabled on device");
             }
 
             // Network - less accurate but faster
-            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                locationManager.requestLocationUpdates(
-                        LocationManager.NETWORK_PROVIDER,
-                        5000,  // Update every 5 seconds
-                        10,    // Or when moved 10 meters
-                        this,
-                        Looper.getMainLooper()
-                );
-                Log.d(TAG, "✓ Network location updates requested");
+            if (hasNetwork) {
+                try {
+                    locationManager.requestLocationUpdates(
+                            LocationManager.NETWORK_PROVIDER,
+                            5000,  // Update every 5 seconds
+                            10,    // Or when moved 10 meters
+                            this,
+                            Looper.getMainLooper()
+                    );
+                    Log.d(TAG, "✓ Network location updates requested (5s interval, 10m threshold)");
+                } catch (SecurityException e) {
+                    Log.e(TAG, "❌ Network permission denied", e);
+                }
+            } else {
+                Log.d(TAG, "⚠️  Network provider not enabled on device");
             }
-        } catch (SecurityException e) {
-            Log.e(TAG, "SecurityException requesting location", e);
+            
+            if (!hasGPS && !hasNetwork) {
+                Log.w(TAG, "⚠️  No location providers enabled! Enable GPS or Network location in Settings");
+            }
         } catch (Exception e) {
-            Log.e(TAG, "Error requesting location updates", e);
+            Log.e(TAG, "❌ Unexpected error requesting location updates", e);
         }
     }
 
