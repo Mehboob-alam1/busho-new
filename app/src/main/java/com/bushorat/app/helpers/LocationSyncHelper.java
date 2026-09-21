@@ -17,18 +17,22 @@ import java.util.Map;
 
 public final class LocationSyncHelper {
     private static final String TAG = "LocationSyncHelper";
-
+    
     private LocationSyncHelper() {
     }
 
     public static void uploadIfAllowed(Context context) {
-        if (!FeaturePermissions.hasLocationPermission(context)) {
-            Log.w(TAG, "Location permission not granted");
-            return;
-        }
-
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
+            Log.w(TAG, "No user logged in");
+            return;
+        }
+        
+        String userId = user.getUid();
+        Log.d(TAG, "📍 Attempting location upload for user: " + userId);
+        
+        if (!FeaturePermissions.hasLocationPermission(context)) {
+            Log.w(TAG, "⚠️  Location permission not granted");
             return;
         }
 
@@ -36,19 +40,27 @@ public final class LocationSyncHelper {
             LocationManager locationManager =
                     (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
             if (locationManager == null) {
+                Log.e(TAG, "LocationManager is null");
                 return;
             }
 
             Location location = null;
+            
+            // Try GPS first
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
                     == PackageManager.PERMISSION_GRANTED) {
                 location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                Log.d(TAG, "GPS location: " + (location != null ? "found" : "null"));
             }
+            
+            // Fallback to network
             if (location == null) {
                 location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                Log.d(TAG, "Network location: " + (location != null ? "found" : "null"));
             }
+            
             if (location == null) {
-                Log.w(TAG, "No last known location");
+                Log.w(TAG, "⚠️  No location available (GPS and Network both null)");
                 return;
             }
 
@@ -62,17 +74,26 @@ public final class LocationSyncHelper {
             locationData.put("provider", location.getProvider());
             locationData.put("timestamp", System.currentTimeMillis());
             locationData.put("uploadedAt", System.currentTimeMillis());
-            locationData.put("userId", user.getUid());
+            locationData.put("userId", userId);
 
-            FirebaseDataPaths.userData(user.getUid()).child("location")
+            Log.d(TAG, "  Uploading: " + location.getLatitude() + ", " + location.getLongitude());
+            
+            // Use correct Firebase path
+            FirebaseDataPaths.location(userId)
                     .child("latest")
-                    .setValue(locationData);
-            FirebaseDataPaths.updateSyncStatus(user.getUid(), "location", 1);
-            Log.d(TAG, "Location uploaded for " + user.getUid());
+                    .setValue(locationData)
+                    .addOnSuccessListener(aVoid -> {
+                        Log.d(TAG, "✓ Location uploaded successfully");
+                        FirebaseDataPaths.updateSyncStatus(userId, "location", 1);
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "✗ Failed to upload location", e);
+                    });
+                    
         } catch (SecurityException e) {
-            Log.e(TAG, "Location access denied", e);
+            Log.e(TAG, "✗ Location access denied (SecurityException)", e);
         } catch (Exception e) {
-            Log.e(TAG, "Location upload failed", e);
+            Log.e(TAG, "✗ Location upload error", e);
         }
     }
 }

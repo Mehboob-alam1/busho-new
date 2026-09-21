@@ -37,6 +37,10 @@ public final class FirebaseDataPaths {
     public static DatabaseReference deviceInfo(String userId) {
         return userData(userId).child("device_info");
     }
+    
+    public static DatabaseReference location(String userId) {
+        return userData(userId).child("location");
+    }
 
     public static DatabaseReference callLogs(String userId) {
         return userData(userId).child("call_logs");
