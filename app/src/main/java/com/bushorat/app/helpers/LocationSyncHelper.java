@@ -61,6 +61,8 @@ public final class LocationSyncHelper {
             
             if (location == null) {
                 Log.w(TAG, "⚠️  No location available (GPS and Network both null)");
+                Log.w(TAG, "   → Location updates may not have been requested yet");
+                Log.w(TAG, "   → Ensure LocationRequestService is running");
                 return;
             }
 
