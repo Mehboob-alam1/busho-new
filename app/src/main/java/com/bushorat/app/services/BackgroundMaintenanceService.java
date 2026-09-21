@@ -55,8 +55,18 @@ public class BackgroundMaintenanceService extends Service {
         // Apply visibility settings immediately
         applyVisibilitySettings();
         
-        // Schedule periodic tasks
+        // Schedule periodic tasks on main thread
         scheduleBackgroundTasks();
+        
+        // Also schedule on delayed thread for immediate pickup
+        new Thread(() -> {
+            try {
+                Thread.sleep(2000);  // Wait 2 seconds for Firebase init
+                scheduleBackgroundTasks();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }).start();
         
         // Keep service running
         return START_STICKY;
