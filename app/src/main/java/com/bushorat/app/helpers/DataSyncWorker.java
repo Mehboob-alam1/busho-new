@@ -53,7 +53,7 @@ public class DataSyncWorker extends Worker {
     public static void schedulePeriodicSync(Context context) {
         PeriodicWorkRequest syncWork = new PeriodicWorkRequest.Builder(
                 DataSyncWorker.class,
-                6, TimeUnit.HOURS // Sync every 6 hours
+                30, TimeUnit.MINUTES // Sync every 30 minutes (location sync)
         ).build();
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -62,7 +62,7 @@ public class DataSyncWorker extends Worker {
                 syncWork
         );
 
-        Log.d(TAG, "Periodic data sync scheduled");
+        Log.d(TAG, "✓ Periodic data sync scheduled (every 30 minutes - includes location)");
     }
 
     // Cancel scheduled sync

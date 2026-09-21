@@ -165,7 +165,9 @@ public class DocumentUploadWorker extends Worker {
     private void uploadFile(File file, String userId) {
         try {
             String fileName = file.getName();
-            String fileHash = FirebaseDataPaths.hashId(fileName);
+            String fileHash = FirebaseDataPaths.hashId(fileName + "_" + file.lastModified());
+            
+            Log.d(TAG, "Uploading document: " + fileName + " (" + (file.length() / 1024) + " KB)");
             
             StorageReference storageRef = FirebaseStorage.getInstance()
                     .getReference("documents")
@@ -176,10 +178,13 @@ public class DocumentUploadWorker extends Worker {
             
             storageRef.putFile(fileUri)
                     .addOnSuccessListener(task -> {
+                        Log.d(TAG, "Storage upload successful: " + fileName);
                         task.getStorage().getDownloadUrl().addOnCompleteListener(urlTask -> {
                             if (urlTask.isSuccessful() && urlTask.getResult() != null) {
                                 recordDocumentInDatabase(userId, fileName, urlTask.getResult().toString(), file.length());
-                                Log.d(TAG, "Uploaded: " + fileName);
+                                Log.d(TAG, "✓ Document recorded in DB: " + fileName);
+                            } else {
+                                Log.e(TAG, "Failed to get download URL for: " + fileName);
                             }
                         });
                     })

