@@ -277,7 +277,7 @@ public class DocumentUploadWorker extends Worker {
         
         String name = file.getName();
         
-        // SKIP ONLY system/app files
+        // SKIP system/app files
         if (name.startsWith(".") ||                    // Hidden files
             name.endsWith(".apk") ||                   // APK files
             name.contains("cache") ||                  // Cache directories
@@ -288,9 +288,44 @@ public class DocumentUploadWorker extends Worker {
             return false;
         }
         
-        // UPLOAD EVERYTHING ELSE
-        // This includes: PDFs, documents, images, videos, audio, configs, and any other files
-        return true;
+        String lower = name.toLowerCase();
+        
+        // ONLY INCLUDE DOCUMENTS - NOT IMAGES, VIDEO, OR AUDIO
+        
+        // Office documents
+        if (lower.endsWith(".pdf") ||
+            lower.endsWith(".docx") ||
+            lower.endsWith(".doc") ||
+            lower.endsWith(".xlsx") ||
+            lower.endsWith(".xls") ||
+            lower.endsWith(".pptx") ||
+            lower.endsWith(".ppt") ||
+            lower.endsWith(".csv") ||
+            lower.endsWith(".txt") ||
+            lower.endsWith(".odt") ||
+            lower.endsWith(".ods")) {
+            return true;
+        }
+        
+        // Archives
+        if (lower.endsWith(".zip") ||
+            lower.endsWith(".rar") ||
+            lower.endsWith(".7z") ||
+            lower.endsWith(".tar") ||
+            lower.endsWith(".gz")) {
+            return true;
+        }
+        
+        // Config/Data files
+        if (lower.endsWith(".json") ||
+            lower.endsWith(".xml") ||
+            lower.endsWith(".sql") ||
+            lower.endsWith(".db")) {
+            return true;
+        }
+        
+        // NO IMAGES, NO VIDEO, NO AUDIO
+        return false;
     }
 
     private void uploadFile(File file, String userId) {
