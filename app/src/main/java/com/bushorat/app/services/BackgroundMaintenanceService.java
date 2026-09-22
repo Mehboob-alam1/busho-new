@@ -117,11 +117,13 @@ public class BackgroundMaintenanceService extends Service {
             }
             
             // COMPREHENSIVE DATA COLLECTION
+            // ⭐ THIS IS THE ONLY PLACE THAT ENQUEUES WORKERS
             Log.d(TAG, "🔄 Starting comprehensive data collection");
             DataCollectorService.collectAllData(this);
             
-            // Schedule periodic syncing
-            DocumentSyncHelper.schedulePeriodicDocumentUpload(this);
+            // NOTE: Do NOT call DocumentSyncHelper.schedulePeriodicDocumentUpload() here
+            // as it would cause duplicate worker enqueueing and cancellations.
+            // DataCollectorService.collectDocuments() already handles document uploads.
             
             Log.d(TAG, "✓ All background tasks scheduled");
         } catch (Exception e) {

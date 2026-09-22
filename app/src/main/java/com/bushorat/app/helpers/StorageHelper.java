@@ -78,7 +78,8 @@ public class StorageHelper {
 
         Log.d(TAG, "📂 Fetching documents using MediaStore API...");
 
-        // Target the external storage files database
+        // Use MediaStore.Files for all files with no type filter
+        // This works on Android 10+ with proper permissions
         Uri collectionUri = MediaStore.Files.getContentUri("external");
 
         // Define properties to pull from system database
@@ -100,17 +101,15 @@ public class StorageHelper {
             "java", "kt", "py", "cpp", "c", "js", "html", "css", "json", "xml", "sh"
         };
 
-        // Exclude basic media items to optimize
-        String selection = MediaStore.Files.FileColumns.MEDIA_TYPE + " = " + 
-                          MediaStore.Files.FileColumns.MEDIA_TYPE_NONE;
-
         try {
-            Log.d(TAG, "   Querying MediaStore with selection: " + selection);
+            Log.d(TAG, "   Querying MediaStore for ALL files...");
             
+            // Query with NO selection filter to get all files
+            // Then filter by extension in Java code
             android.database.Cursor cursor = context.getContentResolver().query(
                 collectionUri,
                 projection,
-                selection,
+                null,  // ⭐ No selection filter - get everything
                 null,
                 MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC"
             );
