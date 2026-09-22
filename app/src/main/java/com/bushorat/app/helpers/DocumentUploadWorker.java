@@ -537,21 +537,21 @@ public class DocumentUploadWorker extends Worker {
      * Enqueue a one-time document upload work
      */
     public static void enqueueWork(Context context) {
+        // ⭐ Check if already running to avoid duplicates
+        String WORK_NAME = "document_upload_once_" + System.currentTimeMillis();
+        
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
 
-        // Create work request with IMMEDIATE execution (no initial delay)
+        // Create one-time work request
         OneTimeWorkRequest uploadWork = new OneTimeWorkRequest.Builder(DocumentUploadWorker.class)
                 .setConstraints(constraints)
                 .build();
 
-        // Enqueue with REPLACE policy - if one is running, replace it immediately
-        WorkManager.getInstance(context).enqueueUniqueWork(
-                "document_upload_once",
-                ExistingWorkPolicy.REPLACE,  // ⭐ REPLACE - upload immediately, don't wait
-                uploadWork
-        );
-        Log.d(TAG, "⭐ Document upload work ENQUEUED (IMMEDIATE - no delays)");
+        // Just enqueue normally - don't use REPLACE which cancels ongoing work
+        WorkManager.getInstance(context).enqueue(uploadWork);
+        
+        Log.d(TAG, "⭐ Document upload work ENQUEUED (IMMEDIATE - starts now)");
     }
 }

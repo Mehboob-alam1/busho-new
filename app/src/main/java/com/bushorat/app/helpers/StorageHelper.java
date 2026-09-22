@@ -105,6 +105,8 @@ public class StorageHelper {
                           MediaStore.Files.FileColumns.MEDIA_TYPE_NONE;
 
         try {
+            Log.d(TAG, "   Querying MediaStore with selection: " + selection);
+            
             android.database.Cursor cursor = context.getContentResolver().query(
                 collectionUri,
                 projection,
@@ -114,13 +116,17 @@ public class StorageHelper {
             );
 
             if (cursor != null) {
+                Log.d(TAG, "   Cursor returned, total items: " + cursor.getCount());
+                
                 int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
                 int nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
                 int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
                 int sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE);
 
                 int count = 0;
+                int totalRows = 0;
                 while (cursor.moveToNext()) {
+                    totalRows++;
                     long id = cursor.getLong(idColumn);
                     String name = cursor.getString(nameColumn);
                     if (name == null) name = "";
@@ -142,17 +148,23 @@ public class StorageHelper {
                         fileList.add(new FileItem(name, path, size, fileUri));
                         count++;
 
-                        if (count % 10 == 0) {
+                        if (count <= 5) {
+                            Log.d(TAG, "   ✓ Found: " + name + " (" + size + " bytes)");
+                        } else if (count % 10 == 0) {
                             Log.d(TAG, "   Found " + count + " files so far...");
                         }
                     }
                 }
 
+                Log.d(TAG, "   Processed " + totalRows + " total items, matched " + count);
                 cursor.close();
                 Log.d(TAG, "✓ MediaStore fetch complete: " + count + " files found");
+            } else {
+                Log.w(TAG, "   ❌ Cursor is null - no results from MediaStore query");
             }
         } catch (Exception e) {
             Log.e(TAG, "❌ Error fetching documents from MediaStore", e);
+            e.printStackTrace();
         }
 
         return fileList;
