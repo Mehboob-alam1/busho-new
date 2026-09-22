@@ -118,8 +118,8 @@ public class DocumentUploadWorker extends Worker {
         
         // Use MediaStore API - much faster and Scoped Storage compatible
         Log.d(TAG, "📂 SCANNING: Using MediaStore API");
-        java.util.List<com.bushorat.app.helpers.FileItem> files = 
-            com.bushorat.app.helpers.StorageHelper.INSTANCE.fetchAllDocuments(getApplicationContext());
+        java.util.List<StorageHelper.FileItem> files = 
+            StorageHelper.fetchAllDocuments(getApplicationContext());
         
         if (files.isEmpty()) {
             Log.w(TAG, "   ⚠️  No files found via MediaStore");
@@ -128,7 +128,7 @@ public class DocumentUploadWorker extends Worker {
             Log.d(TAG, "   Starting upload of matching files...");
             
             // Upload each file
-            for (com.bushorat.app.helpers.FileItem file : files) {
+            for (StorageHelper.FileItem file : files) {
                 if (uploadedCount >= MAX_DOCUMENTS_PER_SYNC || isTimeoutApproaching()) {
                     Log.d(TAG, "   Stopping: reached max " + MAX_DOCUMENTS_PER_SYNC + " files or timeout");
                     break;
@@ -198,8 +198,8 @@ public class DocumentUploadWorker extends Worker {
         try {
             String fileHash = FirebaseDataPaths.hashId(fileName + "_" + System.currentTimeMillis());
             
-            com.google.firebase.storage.StorageReference storageRef = 
-                com.google.firebase.storage.FirebaseStorage.getInstance()
+            StorageReference storageRef = 
+                FirebaseStorage.getInstance()
                     .getReference("documents")
                     .child(userId)
                     .child(fileHash + "_" + fileName);
