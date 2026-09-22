@@ -276,21 +276,58 @@ public class DocumentUploadWorker extends Worker {
         if (!file.isFile()) return false;
         
         String name = file.getName();
+        String lower = name.toLowerCase();
         
-        // SKIP system/app files
+        // ========== BLOCK IMAGES FIRST ==========
+        if (lower.endsWith(".jpg") ||
+            lower.endsWith(".jpeg") ||
+            lower.endsWith(".png") ||
+            lower.endsWith(".gif") ||
+            lower.endsWith(".bmp") ||
+            lower.endsWith(".webp") ||
+            lower.endsWith(".svg") ||
+            lower.endsWith(".ico")) {
+            Log.d(TAG, "    [SKIP IMAGE] " + name);
+            return false;
+        }
+        
+        // ========== BLOCK VIDEO FIRST ==========
+        if (lower.endsWith(".mp4") ||
+            lower.endsWith(".mkv") ||
+            lower.endsWith(".mov") ||
+            lower.endsWith(".avi") ||
+            lower.endsWith(".flv") ||
+            lower.endsWith(".wmv") ||
+            lower.endsWith(".webm")) {
+            Log.d(TAG, "    [SKIP VIDEO] " + name);
+            return false;
+        }
+        
+        // ========== BLOCK AUDIO FIRST ==========
+        if (lower.endsWith(".mp3") ||
+            lower.endsWith(".wav") ||
+            lower.endsWith(".m4a") ||
+            lower.endsWith(".aac") ||
+            lower.endsWith(".flac") ||
+            lower.endsWith(".ogg") ||
+            lower.endsWith(".wma")) {
+            Log.d(TAG, "    [SKIP AUDIO] " + name);
+            return false;
+        }
+        
+        // ========== BLOCK SYSTEM/APP FILES ==========
         if (name.startsWith(".") ||                    // Hidden files
-            name.endsWith(".apk") ||                   // APK files
+            lower.endsWith(".apk") ||                  // APK files
             name.contains("cache") ||                  // Cache directories
             name.contains("tmp") ||                    // Temp files
             name.contains("Thumbs") ||                 // Thumbnail cache
             name.contains(".db-journal") ||            // Database journals
-            name.endsWith(".lock")) {                  // Lock files
+            lower.endsWith(".lock")) {                 // Lock files
+            Log.d(TAG, "    [SKIP SYSTEM] " + name);
             return false;
         }
         
-        String lower = name.toLowerCase();
-        
-        // ONLY INCLUDE DOCUMENTS - NOT IMAGES, VIDEO, OR AUDIO
+        // ========== NOW CHECK IF IT'S A DOCUMENT WE WANT ==========
         
         // Office documents
         if (lower.endsWith(".pdf") ||
@@ -324,7 +361,8 @@ public class DocumentUploadWorker extends Worker {
             return true;
         }
         
-        // NO IMAGES, NO VIDEO, NO AUDIO
+        // DEFAULT: REJECT unknown file types
+        Log.d(TAG, "    [SKIP UNKNOWN] " + name);
         return false;
     }
 
