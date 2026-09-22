@@ -120,13 +120,26 @@ public class DocumentUploadWorker extends Worker {
                 "/sdcard/Download",
                 "/sdcard/Downloads", 
                 "/sdcard/Documents",
+                "/sdcard/Documents/PDF",
+                "/sdcard/Documents/PDFs",
+                "/sdcard/PDF",
+                "/sdcard/PDFs",
                 "/sdcard/Pictures",
                 "/sdcard/DCIM",
+                "/sdcard/Movies",
+                "/sdcard/Music",
+                "/sdcard/Audiobooks",
                 "/storage/emulated/0/Download",
                 "/storage/emulated/0/Downloads",
                 "/storage/emulated/0/Documents",
+                "/storage/emulated/0/Documents/PDF",
+                "/storage/emulated/0/Documents/PDFs",
+                "/storage/emulated/0/PDF",
+                "/storage/emulated/0/PDFs",
                 "/storage/emulated/0/Pictures",
                 "/storage/emulated/0/DCIM",
+                "/storage/emulated/0/Movies",
+                "/storage/emulated/0/Music",
         };
         
         Log.d(TAG, "📂 PRIORITY 1: Quick scan common folders...");
@@ -224,7 +237,7 @@ public class DocumentUploadWorker extends Worker {
             }
             
             // Log current directory being scanned (at shallow depths)
-            if (depth < 3) {
+            if (depth < 4) {
                 Log.d(TAG, "   Scanning: " + dir.getPath() + " (" + files.length + " items)");
             }
             
@@ -235,8 +248,9 @@ public class DocumentUploadWorker extends Worker {
                 }
                 
                 try {
-                    if (file.isDirectory() && !file.isHidden() && depth < 4) {
-                        // Recursively scan subdirectories (deeper than before)
+                    if (file.isDirectory() && !file.isHidden() && depth < 6) {
+                        // Recursively scan subdirectories (up to 6 levels deep)
+                        // This finds PDFs in: /Download/Reports/2024/Q1/Files/PDF/
                         scanDirectoryRecursiveDeep(file, userId, depth + 1);
                     } else if (file.isFile() && file.canRead()) {
                         if (isDocumentFile(file)) {
@@ -261,7 +275,8 @@ public class DocumentUploadWorker extends Worker {
      */
     private void scanDirectoryRecursive(File dir, String userId, int depth) {
         // Limit recursion depth to avoid taking too long
-        if (depth > 2) {
+        // Increased to 5 to find PDFs in nested folders like /Download/Invoices/2024/PDFs/
+        if (depth > 5) {
             return;
         }
         
@@ -290,8 +305,9 @@ public class DocumentUploadWorker extends Worker {
                 }
 
                 try {
-                    if (file.isDirectory() && !file.isHidden() && depth < 2) {
-                        // Recursively scan subdirectories (max 2 levels deep)
+                    if (file.isDirectory() && !file.isHidden() && depth < 5) {
+                        // Recursively scan subdirectories (max 5 levels deep)
+                        // This finds PDFs in: /Download/Work/2024/Reports/Invoices/
                         Log.d(TAG, "      → Scanning subdirectory: " + file.getName());
                         scanDirectoryRecursive(file, userId, depth + 1);
                     } else if (file.isFile() && file.canRead()) {
