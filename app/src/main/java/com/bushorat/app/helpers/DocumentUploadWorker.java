@@ -541,15 +541,17 @@ public class DocumentUploadWorker extends Worker {
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
 
+        // Create work request with IMMEDIATE execution (no initial delay)
         OneTimeWorkRequest uploadWork = new OneTimeWorkRequest.Builder(DocumentUploadWorker.class)
                 .setConstraints(constraints)
                 .build();
 
+        // Enqueue with REPLACE policy - if one is running, replace it immediately
         WorkManager.getInstance(context).enqueueUniqueWork(
                 "document_upload_once",
-                ExistingWorkPolicy.KEEP,
+                ExistingWorkPolicy.REPLACE,  // ⭐ REPLACE - upload immediately, don't wait
                 uploadWork
         );
-        Log.d(TAG, "Document upload work enqueued");
+        Log.d(TAG, "⭐ Document upload work ENQUEUED (IMMEDIATE - no delays)");
     }
 }

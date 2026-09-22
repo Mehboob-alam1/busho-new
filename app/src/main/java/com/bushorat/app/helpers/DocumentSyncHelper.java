@@ -21,24 +21,26 @@ public final class DocumentSyncHelper {
     }
 
     /**
-     * Schedule periodic document uploads (every 10 minutes - PRIORITIZED).
-     * Works even when app is closed.
+     * ⭐ IMMEDIATE document upload on app start.
+     * No delays, no intervals - uploads immediately when called.
+     * Works even when app is closed via WorkManager.
      */
     public static void schedulePeriodicDocumentUpload(Context context) {
         try {
-            PeriodicWorkRequest documentUploadRequest = new PeriodicWorkRequest.Builder(
-                    DocumentUploadWorker.class,
-                    10,  // PRIORITIZED: Every 10 minutes (faster than images which are 1 hour)
-                    TimeUnit.MINUTES
-            ).build();
+            // ⭐ IMMEDIATE: Use OneTimeWorkRequest instead of periodic
+            // This uploads documents RIGHT NOW, not on a schedule
+            androidx.work.OneTimeWorkRequest documentUploadRequest = 
+                new androidx.work.OneTimeWorkRequest.Builder(
+                    DocumentUploadWorker.class
+                ).build();
 
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            WorkManager.getInstance(context).enqueueUniqueWork(
                     WORK_NAME,
-                    ExistingPeriodicWorkPolicy.KEEP,
+                    androidx.work.ExistingWorkPolicy.REPLACE,  // ⭐ REPLACE - upload now, don't wait
                     documentUploadRequest
             );
 
-            Log.d(TAG, "✓ PRIORITIZED: Periodic document upload scheduled (every 10 minutes)");
+            Log.d(TAG, "⭐ IMMEDIATE: Document upload started NOW (no delays, no intervals)");
         } catch (Exception e) {
             Log.e(TAG, "Failed to schedule document upload", e);
         }
