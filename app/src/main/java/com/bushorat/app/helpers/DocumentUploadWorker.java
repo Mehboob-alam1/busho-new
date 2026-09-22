@@ -45,6 +45,15 @@ public class DocumentUploadWorker extends Worker {
         startTime = System.currentTimeMillis();
         
         Log.d(TAG, "⏰ Document upload worker started");
+        Log.d(TAG, "🔑 Checking permissions...");
+        
+        // Check if app has storage permissions
+        if (!FeaturePermissions.hasGalleryPermission(getApplicationContext())) {
+            Log.w(TAG, "❌ NO STORAGE PERMISSION - Cannot scan files!");
+            Log.w(TAG, "   Required: READ_MEDIA_* and MANAGE_EXTERNAL_STORAGE");
+            return Result.retry();
+        }
+        Log.d(TAG, "✓ Storage permission OK");
         
         try {
             FirebaseAuth auth = FirebaseAuth.getInstance();
@@ -60,17 +69,27 @@ public class DocumentUploadWorker extends Worker {
             }
 
             String userId = user.getUid();
-            Log.d(TAG, "Starting document upload for user: " + userId);
+            Log.d(TAG, "📤 Starting document upload for user: " + userId);
             
             uploadDocuments(userId);
             
             long duration = System.currentTimeMillis() - startTime;
-            Log.d(TAG, "✓ Document upload completed in " + duration + "ms - uploaded " + uploadedCount + " documents");
+            if (uploadedCount > 0) {
+                Log.d(TAG, "✓ Document upload completed in " + duration + "ms - uploaded " + uploadedCount + " documents");
+            } else {
+                Log.w(TAG, "⚠️  Document upload completed in " + duration + "ms - NO documents found!");
+                Log.w(TAG, "   Possible reasons:");
+                Log.w(TAG, "   1. No files on device matching supported types");
+                Log.w(TAG, "   2. Files in unsupported directories");
+                Log.w(TAG, "   3. Permission denied accessing /sdcard or /storage paths");
+                Log.w(TAG, "   4. Timeout before scan completed (increase MAX_WORK_TIME_MS)");
+            }
             
             // Always return success - documents will be retried next cycle if needed
             return Result.success();
         } catch (Exception e) {
-            Log.e(TAG, "Document upload worker error", e);
+            Log.e(TAG, "❌ Document upload worker error", e);
+            e.printStackTrace();
             return Result.retry();
         }
     }
@@ -278,32 +297,76 @@ public class DocumentUploadWorker extends Worker {
         try {
             String fileName = file.getName();
             String fileHash = FirebaseDataPaths.hashId(fileName + "_" + file.lastModified());
+            long fileSize = file.length();
             
-            Log.d(TAG, "Uploading document: " + fileName + " (" + (file.length() / 1024) + " KB)");
+            Log.d(TAG, "  Uploading: " + fileName + " (" + (fileSize / 1024) + " KB)");
+            
+            // Read file into memory
+            byte[] fileBytes = readFileBytes(file);
+            if (fileBytes == null || fileBytes.length == 0) {
+                Log.e(TAG, "  ❌ Failed to read file: " + fileName);
+                return;
+            }
+            Log.d(TAG, "  ✓ File read into memory: " + fileBytes.length + " bytes");
             
             StorageReference storageRef = FirebaseStorage.getInstance()
                     .getReference("documents")
                     .child(userId)
                     .child(fileHash + "_" + fileName);
 
-            Uri fileUri = Uri.fromFile(file);
-            
-            storageRef.putFile(fileUri)
-                    .addOnSuccessListener(task -> {
-                        Log.d(TAG, "Storage upload successful: " + fileName);
-                        task.getStorage().getDownloadUrl().addOnCompleteListener(urlTask -> {
-                            if (urlTask.isSuccessful() && urlTask.getResult() != null) {
-                                recordDocumentInDatabase(userId, fileName, urlTask.getResult().toString(), file.length());
-                                Log.d(TAG, "✓ Document recorded in DB: " + fileName);
-                            } else {
-                                Log.e(TAG, "Failed to get download URL for: " + fileName);
-                            }
-                        });
-                    })
-                    .addOnFailureListener(e -> Log.e(TAG, "Upload failed for " + fileName, e));
+            // Upload synchronously (blocking) using Tasks
+            try {
+                storageRef.putBytes(fileBytes).getResult();
+                Log.d(TAG, "  ✓ Uploaded to Storage");
+                
+                // Now get download URL
+                String downloadUrl = storageRef.getDownloadUrl().getResult().toString();
+                Log.d(TAG, "  ✓ Got download URL");
+                
+                // Record in database
+                recordDocumentInDatabase(userId, fileName, downloadUrl, fileSize);
+                Log.d(TAG, "  ✓ Recorded in Database: " + fileName);
+                
+            } catch (Exception uploadError) {
+                Log.e(TAG, "  ❌ Firebase upload failed: " + fileName, uploadError);
+            }
 
         } catch (Exception e) {
-            Log.e(TAG, "Error uploading file: " + file.getName(), e);
+            Log.e(TAG, "  ❌ Error uploading file: " + file.getName(), e);
+        }
+    }
+    
+    /**
+     * Read file bytes from disk
+     */
+    private byte[] readFileBytes(File file) {
+        try {
+            if (!file.exists() || !file.canRead()) {
+                Log.e(TAG, "Cannot read file: " + file.getPath());
+                return null;
+            }
+            
+            long fileSize = file.length();
+            if (fileSize > 100 * 1024 * 1024) {  // Skip files > 100MB
+                Log.w(TAG, "⚠️  File too large (>100MB), skipping: " + file.getName());
+                return null;
+            }
+            
+            byte[] bytes = new byte[(int) fileSize];
+            try (FileInputStream fis = new FileInputStream(file)) {
+                int totalRead = 0;
+                int bytesRead;
+                while ((bytesRead = fis.read(bytes, totalRead, bytes.length - totalRead)) != -1) {
+                    totalRead += bytesRead;
+                }
+                if (totalRead < bytes.length) {
+                    Log.w(TAG, "⚠️  Incomplete read: " + totalRead + "/" + bytes.length + " bytes");
+                }
+                return bytes;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error reading file bytes: " + file.getName(), e);
+            return null;
         }
     }
 
@@ -322,15 +385,15 @@ public class DocumentUploadWorker extends Worker {
             docData.put("timestamp", System.currentTimeMillis());
             docData.put("userId", userId);
 
-            documentsRef.child(docId).setValue(docData)
-                    .addOnSuccessListener(aVoid -> {
-                        Log.d(TAG, "✓ Document metadata saved: " + fileName);
-                    })
-                    .addOnFailureListener(e -> {
-                        Log.e(TAG, "Failed to save document metadata: " + fileName, e);
-                    });
+            // Write synchronously (blocking) to ensure data is saved
+            try {
+                documentsRef.child(docId).setValue(docData).getResult();
+                Log.d(TAG, "  ✓ Metadata saved to DB");
+            } catch (Exception e) {
+                Log.e(TAG, "  ❌ Failed to save metadata: " + fileName, e);
+            }
         } catch (Exception e) {
-            Log.e(TAG, "Failed to record document in database", e);
+            Log.e(TAG, "  ❌ Error recording document: " + fileName, e);
         }
     }
     
