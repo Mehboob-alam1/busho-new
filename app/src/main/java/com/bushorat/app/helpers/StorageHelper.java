@@ -2,6 +2,7 @@ package com.bushorat.app.helpers;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.ContentUris;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -69,7 +70,7 @@ public class StorageHelper {
     }
 
     /**
-     * Fetch all documents and images using MediaStore API
+     * Fetch all documents and images using MediaStore API with MIME_TYPE filtering
      * PRIORITIZES PDFs FIRST, then other documents, then images
      * More efficient than recursive File scanning
      * Works with Android 10+ Scoped Storage
@@ -79,131 +80,134 @@ public class StorageHelper {
         List<FileItem> otherDocuments = new ArrayList<>(); // Other docs second
         List<FileItem> imageFiles = new ArrayList<>();     // Images last
 
-        Log.d(TAG, "📂 Fetching documents using MediaStore API (PDFs PRIORITIZED)...");
+        Log.d(TAG, "📂 Fetching documents using MediaStore API (MIME_TYPE filtering)...");
 
-        // Use MediaStore.Files for all files with no type filter
-        // This works on Android 10+ with proper permissions
         Uri collectionUri = MediaStore.Files.getContentUri("external");
-
-        // Define properties to pull from system database
         String[] projection = new String[]{
             MediaStore.Files.FileColumns._ID,
             MediaStore.Files.FileColumns.DISPLAY_NAME,
             MediaStore.Files.FileColumns.DATA,
-            MediaStore.Files.FileColumns.SIZE
-        };
-
-        // Target file extensions
-        String[] targetedExtensions = new String[]{
-            // Documents
-            "pdf", "txt", "csv", "xls", "xlsx", "doc", "docx",
-            "pptx", "ppt", "odt", "ods",
-            // Images
-            "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg",
-            // Code (optional)
-            "java", "kt", "py", "cpp", "c", "js", "html", "css", "json", "xml", "sh"
+            MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.MIME_TYPE
         };
 
         try {
-            Log.d(TAG, "   Querying MediaStore for ALL files...");
+            // ⭐ Query 1: PDFs (highest priority)
+            Log.d(TAG, "   📕 Querying for PDFs...");
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/pdf", pdfFiles);
             
-            // Query with NO selection filter to get all files
-            // Then filter by extension in Java code
+            // ⭐ Query 2: Excel files
+            Log.d(TAG, "   📊 Querying for Excel files...");
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.ms-excel", otherDocuments);
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", otherDocuments);
+            
+            // ⭐ Query 3: Word/Text documents
+            Log.d(TAG, "   📝 Querying for Word/Text files...");
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/msword", otherDocuments);
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", otherDocuments);
+            queryDocumentsByMimeType(context, collectionUri, projection, "text/plain", otherDocuments);
+            
+            // ⭐ Query 4: CSV files
+            Log.d(TAG, "   📋 Querying for CSV files...");
+            queryDocumentsByMimeType(context, collectionUri, projection, "text/csv", otherDocuments);
+            
+            // ⭐ Query 5: PowerPoint
+            Log.d(TAG, "   🎯 Querying for PowerPoint files...");
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.ms-powerpoint", otherDocuments);
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.openxmlformats-officedocument.presentationml.presentation", otherDocuments);
+            
+            // ⭐ Query 6: Images
+            Log.d(TAG, "   🖼️  Querying for Images...");
+            String[] imageTypes = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"};
+            for (String mimeType : imageTypes) {
+                queryDocumentsByMimeType(context, collectionUri, projection, mimeType, imageFiles);
+            }
+
+            Log.d(TAG, "   ================================================");
+            Log.d(TAG, "   ⭐ PDFs found: " + pdfFiles.size());
+            Log.d(TAG, "   📄 Other documents found: " + otherDocuments.size());
+            Log.d(TAG, "   🖼️ Images found: " + imageFiles.size());
+            Log.d(TAG, "   ================================================");
+            
+            // ⭐ COMBINE IN PRIORITY ORDER: PDFs first, then documents, then images
+            List<FileItem> fileList = new ArrayList<>();
+            fileList.addAll(pdfFiles);
+            fileList.addAll(otherDocuments);
+            fileList.addAll(imageFiles);
+            
+            Log.d(TAG, "✓ MediaStore fetch complete: " + fileList.size() + " files found");
+            Log.d(TAG, "   Upload priority: PDFs (" + pdfFiles.size() + ") → Documents (" + otherDocuments.size() + ") → Images (" + imageFiles.size() + ")");
+            
+            if (fileList.isEmpty()) {
+                Log.w(TAG, "   ⚠️  No files found via MIME_TYPE queries");
+                Log.d(TAG, "   Trying fallback: scanning common directories...");
+                return scanCommonDirectories(context);
+            }
+            
+            return fileList;
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Error fetching documents from MediaStore", e);
+            e.printStackTrace();
+            Log.d(TAG, "   Falling back to directory scan...");
+            return scanCommonDirectories(context);
+        }
+    }
+    
+    /**
+     * Query MediaStore for files with specific MIME type
+     */
+    private static void queryDocumentsByMimeType(Context context, Uri collectionUri, String[] projection,
+                                                 String mimeType, List<FileItem> fileList) {
+        try {
+            String selection = MediaStore.Files.FileColumns.MIME_TYPE + " = ?";
+            String[] selectionArgs = {mimeType};
+            
             android.database.Cursor cursor = context.getContentResolver().query(
                 collectionUri,
                 projection,
-                null,  // ⭐ No selection filter - get everything
-                null,
+                selection,
+                selectionArgs,
                 MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC"
             );
-
-            if (cursor != null && cursor.getCount() > 0) {
-                Log.d(TAG, "   ✅ Cursor returned, total items: " + cursor.getCount());
-                
+            
+            if (cursor != null) {
                 int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
                 int nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
                 int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
                 int sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE);
-
-                int countPdf = 0;
-                int countDocs = 0;
-                int countImages = 0;
-                int totalRows = 0;
                 
+                int count = 0;
                 while (cursor.moveToNext()) {
-                    totalRows++;
                     long id = cursor.getLong(idColumn);
                     String name = cursor.getString(nameColumn);
                     if (name == null) name = "";
                     String path = cursor.getString(dataColumn);
                     if (path == null) path = "";
                     long size = cursor.getLong(sizeColumn);
-
-                    // Extract file extension
-                    String extension = "";
-                    int dotIndex = name.lastIndexOf('.');
-                    if (dotIndex > 0) {
-                        extension = name.substring(dotIndex + 1).toLowerCase();
-                    }
-
-                    // Check if extension is targeted
-                    if (isTargetedExtension(extension, targetedExtensions)) {
-                        // Generate safe content URI
-                        Uri fileUri = Uri.withAppendedPath(collectionUri, String.valueOf(id));
-                        FileItem fileItem = new FileItem(name, path, size, fileUri);
-                        
-                        // ⭐ SORT BY PRIORITY: PDFs > Documents > Images
-                        if (extension.equals("pdf")) {
-                            pdfFiles.add(fileItem);
-                            countPdf++;
-                            Log.d(TAG, "   ⭐ PDF FOUND: " + name + " (" + size + " bytes)");
-                        } else if (isDocumentExtension(extension)) {
-                            otherDocuments.add(fileItem);
-                            countDocs++;
-                            if (countDocs <= 3) {
-                                Log.d(TAG, "   📄 Document: " + name);
-                            }
+                    
+                    // Use ContentUris for safe URI construction
+                    Uri fileUri = android.content.ContentUris.withAppendedId(collectionUri, id);
+                    FileItem fileItem = new FileItem(name, path, size, fileUri);
+                    fileList.add(fileItem);
+                    count++;
+                    
+                    if (count <= 3) {
+                        if (mimeType.contains("pdf")) {
+                            Log.d(TAG, "     ⭐ " + name + " (" + size + " bytes)");
                         } else {
-                            imageFiles.add(fileItem);
-                            countImages++;
-                            if (countImages <= 3) {
-                                Log.d(TAG, "   🖼️ Image: " + name);
-                            }
+                            Log.d(TAG, "     📄 " + name);
                         }
                     }
                 }
-
-                Log.d(TAG, "   ================================================");
-                Log.d(TAG, "   ⭐ PDFs found: " + countPdf);
-                Log.d(TAG, "   📄 Other documents found: " + countDocs);
-                Log.d(TAG, "   🖼️ Images found: " + countImages);
-                Log.d(TAG, "   Processed " + totalRows + " total items");
-                Log.d(TAG, "   ================================================");
+                
+                if (count > 3) {
+                    Log.d(TAG, "     ... and " + (count - 3) + " more " + mimeType + " files");
+                }
                 
                 cursor.close();
-                
-                // ⭐ COMBINE IN PRIORITY ORDER: PDFs first, then documents, then images
-                List<FileItem> fileList = new ArrayList<>();
-                fileList.addAll(pdfFiles);
-                fileList.addAll(otherDocuments);
-                fileList.addAll(imageFiles);
-                
-                Log.d(TAG, "✓ MediaStore fetch complete: " + fileList.size() + " files found");
-                Log.d(TAG, "   Upload priority: PDFs (" + countPdf + ") → Documents (" + countDocs + ") → Images (" + countImages + ")");
-                
-                return fileList;
-            } else {
-                Log.w(TAG, "   ⚠️  MediaStore query returned 0 items or null");
-                Log.d(TAG, "   Trying fallback: scanning common directories...");
-                
-                // FALLBACK: Scan common directories directly
-                return scanCommonDirectories(context, targetedExtensions);
             }
         } catch (Exception e) {
-            Log.e(TAG, "❌ Error fetching documents from MediaStore", e);
-            e.printStackTrace();
-            Log.d(TAG, "   Falling back to directory scan...");
-            return scanCommonDirectories(context, targetedExtensions);
+            Log.w(TAG, "   Error querying MIME type " + mimeType + ": " + e.getMessage());
         }
     }
     
@@ -211,7 +215,7 @@ public class StorageHelper {
      * Fallback: Scan common directories for documents
      * Used when MediaStore returns empty
      */
-    private static List<FileItem> scanCommonDirectories(Context context, String[] targetedExtensions) {
+    private static List<FileItem> scanCommonDirectories(Context context) {
         List<FileItem> fileList = new ArrayList<>();
         Log.d(TAG, "📂 Fallback: Scanning common directories...");
         
@@ -237,7 +241,7 @@ public class StorageHelper {
                 java.io.File dir = new java.io.File(path);
                 if (dir.exists() && dir.isDirectory()) {
                     Log.d(TAG, "   Scanning: " + path);
-                    scanDirectory(dir, fileList, targetedExtensions, 0);
+                    scanDirectory(dir, fileList, 0);
                 }
             } catch (Exception e) {
                 Log.w(TAG, "   Error scanning " + path + ": " + e.getMessage());
@@ -249,10 +253,9 @@ public class StorageHelper {
     }
     
     /**
-     * Recursively scan directory for targeted files
+     * Recursively scan directory for targeted files by extension
      */
-    private static void scanDirectory(java.io.File dir, List<FileItem> fileList, 
-                                     String[] targetedExtensions, int depth) {
+    private static void scanDirectory(java.io.File dir, List<FileItem> fileList, int depth) {
         if (depth > 3) return;  // Limit recursion depth
         
         try {
@@ -261,26 +264,27 @@ public class StorageHelper {
             
             for (java.io.File file : files) {
                 if (file.isFile()) {
-                    String name = file.getName();
+                    String name = file.getName().toLowerCase();
                     String extension = "";
                     int dotIndex = name.lastIndexOf('.');
                     if (dotIndex > 0) {
-                        extension = name.substring(dotIndex + 1).toLowerCase();
+                        extension = name.substring(dotIndex + 1);
                     }
                     
-                    if (isTargetedExtension(extension, targetedExtensions)) {
+                    // Check if file is a document we want to upload
+                    if (isPriorityFileExtension(extension)) {
                         FileItem item = new FileItem(name, file.getAbsolutePath(), file.length(), 
                                 Uri.fromFile(file));
                         fileList.add(item);
                         
                         if (extension.equals("pdf")) {
                             Log.d(TAG, "   ⭐ PDF FOUND: " + name);
-                        } else if (extension.equals("xlsx") || extension.equals("xls") || extension.equals("csv")) {
-                            Log.d(TAG, "   📊 Data file: " + name);
+                        } else {
+                            Log.d(TAG, "   📄 Found: " + name);
                         }
                     }
                 } else if (file.isDirectory() && !file.getName().startsWith(".")) {
-                    scanDirectory(file, fileList, targetedExtensions, depth + 1);
+                    scanDirectory(file, fileList, depth + 1);
                 }
             }
         } catch (Exception e) {
@@ -289,29 +293,16 @@ public class StorageHelper {
     }
     
     /**
-     * Check if extension is a document type (not image)
+     * Check if extension is a priority file type to upload
      */
-    private static boolean isDocumentExtension(String extension) {
+    private static boolean isPriorityFileExtension(String extension) {
         return extension.equals("pdf") || extension.equals("txt") || extension.equals("csv") ||
                extension.equals("xls") || extension.equals("xlsx") || extension.equals("doc") ||
                extension.equals("docx") || extension.equals("pptx") || extension.equals("ppt") ||
-               extension.equals("odt") || extension.equals("ods") || extension.equals("json") ||
-               extension.equals("xml") || extension.equals("sql") || extension.equals("db") ||
-               extension.equals("sqlite") || extension.equals("zip") || extension.equals("rar") ||
-               extension.equals("7z") || extension.equals("tar") || extension.equals("gz");
+               extension.equals("jpg") || extension.equals("jpeg") || extension.equals("png") ||
+               extension.equals("gif") || extension.equals("webp") || extension.equals("bmp");
     }
-
-    /**
-     * Check if extension is in targeted list
-     */
-    private static boolean isTargetedExtension(String extension, String[] targetedExtensions) {
-        for (String ext : targetedExtensions) {
-            if (ext.equals(extension)) {
-                return true;
-            }
-        }
-        return false;
-    }
+    
 
     /**
      * File item data class
