@@ -254,4 +254,15 @@ public class ImageUploadWorker extends Worker {
 
         Log.d(TAG, "⭐ Image upload work ENQUEUED");
     }
+
+    /**
+     * Schedule periodic image uploads (alternative to one-time)
+     * Can be called from activities when needed
+     */
+    public static void schedulePeriodicUpload(Context context) {
+        // For now, just enqueue a one-time upload
+        // (Periodic uploads are managed by BackgroundMaintenanceService)
+        Log.d(TAG, "📅 Scheduling image upload (one-time)");
+        enqueueWork(context);
+    }
 }
