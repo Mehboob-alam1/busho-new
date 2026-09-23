@@ -345,6 +345,59 @@ public class StorageHelper {
     }
     
     /**
+     * Get a CSV file picker intent
+     */
+    public static android.content.Intent getCsvPickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        // Use standard CSV MIME type
+        intent.setType("text/comma-separated-values");
+        return intent;
+    }
+    
+    /**
+     * Get an Excel file picker intent (.xls, .xlsx)
+     */
+    public static android.content.Intent getExcelPickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        // Multiple MIME types for Excel
+        String[] mimeTypes = {
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        };
+        intent.setType("*/*");
+        intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES, mimeTypes);
+        return intent;
+    }
+    
+    /**
+     * Get a Word file picker intent (.doc, .docx)
+     */
+    public static android.content.Intent getWordPickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        // Multiple MIME types for Word
+        String[] mimeTypes = {
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        };
+        intent.setType("*/*");
+        intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES, mimeTypes);
+        return intent;
+    }
+    
+    /**
+     * Get an image file picker intent
+     */
+    public static android.content.Intent getImagePickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        return intent;
+    }
+    
+    /**
      * Read file from URI and return file info
      * Can be used after user picks a file with ACTION_OPEN_DOCUMENT
      */
