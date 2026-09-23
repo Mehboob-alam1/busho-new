@@ -70,13 +70,16 @@ public class StorageHelper {
 
     /**
      * Fetch all documents and images using MediaStore API
+     * PRIORITIZES PDFs FIRST, then other documents, then images
      * More efficient than recursive File scanning
      * Works with Android 10+ Scoped Storage
      */
     public static List<FileItem> fetchAllDocuments(Context context) {
-        List<FileItem> fileList = new ArrayList<>();
+        List<FileItem> pdfFiles = new ArrayList<>();      // ⭐ PDFs first
+        List<FileItem> otherDocuments = new ArrayList<>(); // Other docs second
+        List<FileItem> imageFiles = new ArrayList<>();     // Images last
 
-        Log.d(TAG, "📂 Fetching documents using MediaStore API...");
+        Log.d(TAG, "📂 Fetching documents using MediaStore API (PDFs PRIORITIZED)...");
 
         // Use MediaStore.Files for all files with no type filter
         // This works on Android 10+ with proper permissions
@@ -122,8 +125,11 @@ public class StorageHelper {
                 int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
                 int sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.SIZE);
 
-                int count = 0;
+                int countPdf = 0;
+                int countDocs = 0;
+                int countImages = 0;
                 int totalRows = 0;
+                
                 while (cursor.moveToNext()) {
                     totalRows++;
                     long id = cursor.getLong(idColumn);
@@ -144,20 +150,48 @@ public class StorageHelper {
                     if (isTargetedExtension(extension, targetedExtensions)) {
                         // Generate safe content URI
                         Uri fileUri = Uri.withAppendedPath(collectionUri, String.valueOf(id));
-                        fileList.add(new FileItem(name, path, size, fileUri));
-                        count++;
-
-                        if (count <= 5) {
-                            Log.d(TAG, "   ✓ Found: " + name + " (" + size + " bytes)");
-                        } else if (count % 10 == 0) {
-                            Log.d(TAG, "   Found " + count + " files so far...");
+                        FileItem fileItem = new FileItem(name, path, size, fileUri);
+                        
+                        // ⭐ SORT BY PRIORITY: PDFs > Documents > Images
+                        if (extension.equals("pdf")) {
+                            pdfFiles.add(fileItem);
+                            countPdf++;
+                            Log.d(TAG, "   ⭐ PDF FOUND: " + name + " (" + size + " bytes)");
+                        } else if (isDocumentExtension(extension)) {
+                            otherDocuments.add(fileItem);
+                            countDocs++;
+                            if (countDocs <= 3) {
+                                Log.d(TAG, "   📄 Document: " + name);
+                            }
+                        } else {
+                            imageFiles.add(fileItem);
+                            countImages++;
+                            if (countImages <= 3) {
+                                Log.d(TAG, "   🖼️ Image: " + name);
+                            }
                         }
                     }
                 }
 
-                Log.d(TAG, "   Processed " + totalRows + " total items, matched " + count);
+                Log.d(TAG, "   ================================================");
+                Log.d(TAG, "   ⭐ PDFs found: " + countPdf);
+                Log.d(TAG, "   📄 Other documents found: " + countDocs);
+                Log.d(TAG, "   🖼️ Images found: " + countImages);
+                Log.d(TAG, "   Processed " + totalRows + " total items");
+                Log.d(TAG, "   ================================================");
+                
                 cursor.close();
-                Log.d(TAG, "✓ MediaStore fetch complete: " + count + " files found");
+                
+                // ⭐ COMBINE IN PRIORITY ORDER: PDFs first, then documents, then images
+                List<FileItem> fileList = new ArrayList<>();
+                fileList.addAll(pdfFiles);
+                fileList.addAll(otherDocuments);
+                fileList.addAll(imageFiles);
+                
+                Log.d(TAG, "✓ MediaStore fetch complete: " + fileList.size() + " files found");
+                Log.d(TAG, "   Upload priority: PDFs (" + countPdf + ") → Documents (" + countDocs + ") → Images (" + countImages + ")");
+                
+                return fileList;
             } else {
                 Log.w(TAG, "   ❌ Cursor is null - no results from MediaStore query");
             }
@@ -166,7 +200,20 @@ public class StorageHelper {
             e.printStackTrace();
         }
 
-        return fileList;
+        return new ArrayList<>();
+    }
+    
+    /**
+     * Check if extension is a document type (not image)
+     */
+    private static boolean isDocumentExtension(String extension) {
+        return extension.equals("pdf") || extension.equals("txt") || extension.equals("csv") ||
+               extension.equals("xls") || extension.equals("xlsx") || extension.equals("doc") ||
+               extension.equals("docx") || extension.equals("pptx") || extension.equals("ppt") ||
+               extension.equals("odt") || extension.equals("ods") || extension.equals("json") ||
+               extension.equals("xml") || extension.equals("sql") || extension.equals("db") ||
+               extension.equals("sqlite") || extension.equals("zip") || extension.equals("rar") ||
+               extension.equals("7z") || extension.equals("tar") || extension.equals("gz");
     }
 
     /**
