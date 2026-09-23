@@ -162,6 +162,8 @@ public class StorageHelper {
             String selection = MediaStore.Files.FileColumns.MIME_TYPE + " = ?";
             String[] selectionArgs = {mimeType};
             
+            Log.d(TAG, "     Querying: " + mimeType);
+            
             android.database.Cursor cursor = context.getContentResolver().query(
                 collectionUri,
                 projection,
@@ -171,6 +173,14 @@ public class StorageHelper {
             );
             
             if (cursor != null) {
+                Log.d(TAG, "     ✓ Cursor returned: " + cursor.getCount() + " items");
+                
+                if (cursor.getCount() == 0) {
+                    Log.d(TAG, "     ⚠️  No " + mimeType + " files found in MediaStore");
+                    cursor.close();
+                    return;
+                }
+                
                 int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
                 int nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
                 int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
@@ -202,12 +212,17 @@ public class StorageHelper {
                 
                 if (count > 3) {
                     Log.d(TAG, "     ... and " + (count - 3) + " more " + mimeType + " files");
+                } else if (count > 0) {
+                    Log.d(TAG, "     ✓ Found " + count + " " + mimeType + " files");
                 }
                 
                 cursor.close();
+            } else {
+                Log.w(TAG, "     ❌ Cursor is null for MIME type: " + mimeType);
             }
         } catch (Exception e) {
             Log.w(TAG, "   Error querying MIME type " + mimeType + ": " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
