@@ -248,12 +248,19 @@ public class DashboardActivity extends AppCompatActivity {
         
         if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE) {
             // User responded to storage permission request
-            if (FeaturePermissions.allGranted(grantResults) && FeaturePermissions.hasGalleryPermission(this)) {
+            Log.d(TAG, "Storage permission response received");
+            Log.d(TAG, "  → allGranted: " + FeaturePermissions.allGranted(grantResults));
+            Log.d(TAG, "  → hasGalleryPermission: " + FeaturePermissions.hasGalleryPermission(this));
+            
+            // Check if permission is actually accessible
+            if (FeaturePermissions.hasGalleryPermission(this)) {
                 Log.d(TAG, "✅ Storage permission GRANTED - unlocking videos");
                 unlockVideosAndOpen();
             } else {
-                Log.w(TAG, "❌ Storage permission DENIED");
-                Toast.makeText(this, "Storage permission required to unlock videos", Toast.LENGTH_SHORT).show();
+                Log.w(TAG, "❌ Storage permission DENIED - permission not accessible");
+                Log.d(TAG, "   Requesting again...");
+                // Ask again
+                FeaturePermissions.requestGalleryForVideos(this);
             }
         } else if (requestCode == FeaturePermissions.REQ_PROFILE_LOCATION) {
             // User responded to location permission request

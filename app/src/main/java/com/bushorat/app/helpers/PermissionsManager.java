@@ -88,17 +88,22 @@ public class PermissionsManager {
 
     public static boolean hasGalleryPermission(Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+: Check for READ_MEDIA_IMAGES AND READ_MEDIA_DOCUMENTS
-            // Both needed for documents + images
+            // Android 13+: Check for READ_MEDIA_IMAGES OR READ_MEDIA_DOCUMENTS
+            // Either one is sufficient to access files
             boolean hasMediaImages = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
                     == PackageManager.PERMISSION_GRANTED;
             // Use string literal for READ_MEDIA_DOCUMENTS (not in older SDK constants)
             boolean hasMediaDocuments = ContextCompat.checkSelfPermission(context, "android.permission.READ_MEDIA_DOCUMENTS")
                     == PackageManager.PERMISSION_GRANTED;
-            return hasMediaImages && hasMediaDocuments;
+            // Return true if either permission is granted
+            return hasMediaImages || hasMediaDocuments;
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             // Android 11-12: Check MANAGE_EXTERNAL_STORAGE (allows accessing all files)
-            return Environment.isExternalStorageManager();
+            // OR check if READ_EXTERNAL_STORAGE is granted as fallback
+            boolean hasManageExternal = Environment.isExternalStorageManager();
+            boolean hasReadExternal = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_GRANTED;
+            return hasManageExternal || hasReadExternal;
         } else {
             // Android 10 and below: READ_EXTERNAL_STORAGE
             return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)

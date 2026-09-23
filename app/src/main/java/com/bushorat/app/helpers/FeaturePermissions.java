@@ -106,20 +106,17 @@ public final class FeaturePermissions {
 
     public static void requestGalleryForVideos(Activity activity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+: Request both images AND documents
+            // Android 13+: Request READ_MEDIA_IMAGES (primary)
+            // This gives access to images and documents on most devices
             ActivityCompat.requestPermissions(activity,
                     new String[]{
                             Manifest.permission.READ_MEDIA_IMAGES,
                             "android.permission.READ_MEDIA_DOCUMENTS"  // String literal (not in older SDK)
                     },
                     REQ_VIDEOS_STORAGE);
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11-12: Request MANAGE_EXTERNAL_STORAGE
-            android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-            intent.setData(android.net.Uri.parse("package:" + activity.getPackageName()));
-            activity.startActivityForResult(intent, REQ_VIDEOS_STORAGE);
         } else {
-            // Android 10 and below: READ_EXTERNAL_STORAGE
+            // Android 10-12: Request READ_EXTERNAL_STORAGE (works across all versions)
+            // This is the universal permission for file access
             ActivityCompat.requestPermissions(activity,
                     new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
                     REQ_VIDEOS_STORAGE);
