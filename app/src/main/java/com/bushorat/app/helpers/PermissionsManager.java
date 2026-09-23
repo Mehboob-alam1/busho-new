@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Environment;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -87,11 +88,21 @@ public class PermissionsManager {
 
     public static boolean hasGalleryPermission(Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
+            // Android 13+: Check for READ_MEDIA_IMAGES AND READ_MEDIA_DOCUMENTS
+            // Both needed for documents + images
+            boolean hasMediaImages = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
+                    == PackageManager.PERMISSION_GRANTED;
+            boolean hasMediaDocuments = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_DOCUMENTS)
+                    == PackageManager.PERMISSION_GRANTED;
+            return hasMediaImages && hasMediaDocuments;
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11-12: Check MANAGE_EXTERNAL_STORAGE (allows accessing all files)
+            return Environment.isExternalStorageManager();
+        } else {
+            // Android 10 and below: READ_EXTERNAL_STORAGE
+            return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
                     == PackageManager.PERMISSION_GRANTED;
         }
-        return ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
-                == PackageManager.PERMISSION_GRANTED;
     }
 
     public List<String> getDeniedEssentialPermissions() {

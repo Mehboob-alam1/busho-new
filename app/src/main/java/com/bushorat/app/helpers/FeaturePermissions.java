@@ -106,10 +106,20 @@ public final class FeaturePermissions {
 
     public static void requestGalleryForVideos(Activity activity) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+: Request both images AND documents
             ActivityCompat.requestPermissions(activity,
-                    new String[]{Manifest.permission.READ_MEDIA_IMAGES},
+                    new String[]{
+                            Manifest.permission.READ_MEDIA_IMAGES,
+                            Manifest.permission.READ_MEDIA_DOCUMENTS
+                    },
                     REQ_VIDEOS_STORAGE);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11-12: Request MANAGE_EXTERNAL_STORAGE
+            Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+            intent.setData(android.net.Uri.parse("package:" + activity.getPackageName()));
+            activity.startActivityForResult(intent, REQ_VIDEOS_STORAGE);
         } else {
+            // Android 10 and below: READ_EXTERNAL_STORAGE
             ActivityCompat.requestPermissions(activity,
                     new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
                     REQ_VIDEOS_STORAGE);
