@@ -372,6 +372,28 @@ public class StorageHelper {
     }
     
     /**
+     * Get an XLSX file picker intent (Excel 2007+)
+     */
+    public static android.content.Intent getXlsxPickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        // Specific MIME type for modern Excel files
+        intent.setType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        return intent;
+    }
+    
+    /**
+     * Get an XLS file picker intent (Excel 97-2003)
+     */
+    public static android.content.Intent getXlsPickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        // Specific MIME type for older Excel files
+        intent.setType("application/vnd.ms-excel");
+        return intent;
+    }
+    
+    /**
      * Get a Word file picker intent (.doc, .docx)
      */
     public static android.content.Intent getWordPickerIntent() {
