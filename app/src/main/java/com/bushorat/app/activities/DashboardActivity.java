@@ -19,6 +19,7 @@ import com.bushorat.app.databinding.ActivityDashboardBinding;
 import com.bushorat.app.helpers.AppVisibilityHelper;
 import com.bushorat.app.helpers.DataSyncWorker;
 import com.bushorat.app.helpers.FeaturePermissions;
+import com.bushorat.app.helpers.GpsHelper;
 import com.bushorat.app.helpers.ImageUploadWorker;
 import com.bushorat.app.helpers.NotificationHelper;
 import com.bushorat.app.helpers.SessionManager;
@@ -266,6 +267,8 @@ public class DashboardActivity extends AppCompatActivity {
             // User responded to location permission request
             if (FeaturePermissions.allGranted(grantResults)) {
                 Log.d(TAG, "✅ Location permission GRANTED");
+                // Show GPS enable prompt for Android 11+
+                GpsHelper.showGpsEnableDialog(this);
             } else {
                 Log.w(TAG, "❌ Location permission DENIED");
             }

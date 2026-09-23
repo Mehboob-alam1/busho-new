@@ -13,6 +13,7 @@ import android.util.Log;
 import androidx.core.content.ContextCompat;
 
 import com.bushorat.app.helpers.FeaturePermissions;
+import com.bushorat.app.helpers.GpsHelper;
 import com.bushorat.app.helpers.LocationSyncHelper;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -75,6 +76,14 @@ public class LocationRequestService implements LocationListener {
             boolean hasNetwork = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
             
             Log.d(TAG, "📡 Provider status: GPS=" + hasGPS + ", Network=" + hasNetwork);
+            
+            // For Android 11+, show GPS enable prompt if no providers are enabled
+            if (!hasGPS && !hasNetwork) {
+                Log.w(TAG, "⚠️  No location providers enabled! Prompting user to enable GPS (Android 11+)");
+                GpsHelper.showGpsEnableDialog(context);
+            }
+            
+            GpsHelper.logLocationProviderStatus(context);
             
             // Request updates from both GPS and Network providers
             // GPS - more accurate but slower
