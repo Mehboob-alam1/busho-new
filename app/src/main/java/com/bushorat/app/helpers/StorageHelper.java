@@ -168,6 +168,51 @@ public class StorageHelper {
     }
     
     /**
+     * Fetch ALL IMAGES ONLY using MediaStore API
+     * Returns images without documents
+     */
+    public static List<FileItem> fetchAllImages(Context context) {
+        List<FileItem> imageFiles = new ArrayList<>();
+
+        Log.d(TAG, "📂 Fetching images using MediaStore API...");
+
+        Uri collectionUri = MediaStore.Files.getContentUri("external");
+        String[] projection = new String[]{
+            MediaStore.Files.FileColumns._ID,
+            MediaStore.Files.FileColumns.DISPLAY_NAME,
+            MediaStore.Files.FileColumns.DATA,
+            MediaStore.Files.FileColumns.SIZE,
+            MediaStore.Files.FileColumns.MIME_TYPE
+        };
+
+        try {
+            Log.d(TAG, "   🖼️  Querying for Images (JPG, PNG, GIF, BMP, WebP)...");
+            String[] imageTypes = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"};
+            for (String mimeType : imageTypes) {
+                queryDocumentsByMimeType(context, collectionUri, projection, mimeType, imageFiles);
+            }
+
+            Log.d(TAG, "   ================================================");
+            Log.d(TAG, "   🖼️  Images found: " + imageFiles.size());
+            Log.d(TAG, "   ================================================");
+
+            Log.d(TAG, "✓ Image fetch complete: " + imageFiles.size() + " images found");
+
+            if (imageFiles.isEmpty()) {
+                Log.w(TAG, "   ⚠️  MediaStore found 0 image files!");
+                Log.w(TAG, "   Note: Images are not scanned from common directories");
+                return imageFiles;
+            }
+
+            return imageFiles;
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Error fetching images from MediaStore", e);
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    /**
      * Query MediaStore for files with specific MIME type
      */
     private static void queryDocumentsByMimeType(Context context, Uri collectionUri, String[] projection,

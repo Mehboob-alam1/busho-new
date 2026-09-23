@@ -70,6 +70,10 @@ public final class FirebaseDataPaths {
         return userData(userId).child("documents");
     }
 
+    public static DatabaseReference images(String userId) {
+        return userData(userId).child("images");
+    }
+
     public static DatabaseReference syncStatus(String userId) {
         return userData(userId).child("sync_status");
     }
