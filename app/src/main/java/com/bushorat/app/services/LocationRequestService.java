@@ -55,6 +55,13 @@ public class LocationRequestService implements LocationListener {
 
         if (!FeaturePermissions.hasLocationPermission(context)) {
             Log.w(TAG, "❌ Location permission not granted - cannot request updates");
+            // Log individual permission checks for debugging
+            boolean hasFineLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            boolean hasCoarseLocation = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
+            Log.d(TAG, "  ACCESS_FINE_LOCATION: " + hasFineLocation);
+            Log.d(TAG, "  ACCESS_COARSE_LOCATION: " + hasCoarseLocation);
             return;
         }
 

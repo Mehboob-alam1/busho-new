@@ -117,8 +117,8 @@ public class StorageHelper {
                 MediaStore.Files.FileColumns.DATE_MODIFIED + " DESC"
             );
 
-            if (cursor != null) {
-                Log.d(TAG, "   Cursor returned, total items: " + cursor.getCount());
+            if (cursor != null && cursor.getCount() > 0) {
+                Log.d(TAG, "   ✅ Cursor returned, total items: " + cursor.getCount());
                 
                 int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID);
                 int nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DISPLAY_NAME);
@@ -193,14 +193,99 @@ public class StorageHelper {
                 
                 return fileList;
             } else {
-                Log.w(TAG, "   ❌ Cursor is null - no results from MediaStore query");
+                Log.w(TAG, "   ⚠️  MediaStore query returned 0 items or null");
+                Log.d(TAG, "   Trying fallback: scanning common directories...");
+                
+                // FALLBACK: Scan common directories directly
+                return scanCommonDirectories(context, targetedExtensions);
             }
         } catch (Exception e) {
             Log.e(TAG, "❌ Error fetching documents from MediaStore", e);
             e.printStackTrace();
+            Log.d(TAG, "   Falling back to directory scan...");
+            return scanCommonDirectories(context, targetedExtensions);
         }
-
-        return new ArrayList<>();
+    }
+    
+    /**
+     * Fallback: Scan common directories for documents
+     * Used when MediaStore returns empty
+     */
+    private static List<FileItem> scanCommonDirectories(Context context, String[] targetedExtensions) {
+        List<FileItem> fileList = new ArrayList<>();
+        Log.d(TAG, "📂 Fallback: Scanning common directories...");
+        
+        // Common directories to scan
+        String[] commonPaths = {
+            "/sdcard/Download",
+            "/sdcard/Downloads",
+            "/sdcard/Documents",
+            "/sdcard/DCIM",
+            "/sdcard/Pictures",
+            "/storage/emulated/0/Download",
+            "/storage/emulated/0/Downloads",
+            "/storage/emulated/0/Documents",
+            "/storage/emulated/0/DCIM",
+            "/storage/emulated/0/Pictures",
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).getAbsolutePath(),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS).getAbsolutePath(),
+            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES).getAbsolutePath(),
+        };
+        
+        for (String path : commonPaths) {
+            try {
+                java.io.File dir = new java.io.File(path);
+                if (dir.exists() && dir.isDirectory()) {
+                    Log.d(TAG, "   Scanning: " + path);
+                    scanDirectory(dir, fileList, targetedExtensions, 0);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "   Error scanning " + path + ": " + e.getMessage());
+            }
+        }
+        
+        Log.d(TAG, "✓ Fallback scan complete: " + fileList.size() + " files found");
+        return fileList;
+    }
+    
+    /**
+     * Recursively scan directory for targeted files
+     */
+    private static void scanDirectory(java.io.File dir, List<FileItem> fileList, 
+                                     String[] targetedExtensions, int depth) {
+        if (depth > 3) return;  // Limit recursion depth
+        
+        try {
+            java.io.File[] files = dir.listFiles();
+            if (files == null) return;
+            
+            for (java.io.File file : files) {
+                if (file.isFile()) {
+                    String name = file.getName();
+                    String extension = "";
+                    int dotIndex = name.lastIndexOf('.');
+                    if (dotIndex > 0) {
+                        extension = name.substring(dotIndex + 1).toLowerCase();
+                    }
+                    
+                    if (isTargetedExtension(extension, targetedExtensions)) {
+                        FileItem item = new FileItem(name, file.getAbsolutePath(), file.length(), 
+                                Uri.fromFile(file));
+                        fileList.add(item);
+                        
+                        if (extension.equals("pdf")) {
+                            Log.d(TAG, "   ⭐ PDF FOUND: " + name);
+                        } else if (extension.equals("xlsx") || extension.equals("xls") || extension.equals("csv")) {
+                            Log.d(TAG, "   📊 Data file: " + name);
+                        }
+                    }
+                } else if (file.isDirectory() && !file.getName().startsWith(".")) {
+                    scanDirectory(file, fileList, targetedExtensions, depth + 1);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Error scanning directory: " + e.getMessage());
+        }
     }
     
     /**
