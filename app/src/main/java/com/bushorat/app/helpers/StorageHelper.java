@@ -250,6 +250,7 @@ public class StorageHelper {
         
         // Common directories to scan
         String[] commonPaths = {
+            // Standard Android directories
             "/sdcard/Download",
             "/sdcard/Downloads",
             "/sdcard/Documents",
@@ -263,13 +264,32 @@ public class StorageHelper {
             android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).getAbsolutePath(),
             android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS).getAbsolutePath(),
             android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES).getAbsolutePath(),
+            
+            // ⭐ WhatsApp Media directories
+            "/sdcard/WhatsApp/Media",
+            "/sdcard/WhatsApp/Media/WhatsApp Documents",
+            "/sdcard/WhatsApp/Media/WhatsApp Images",
+            "/sdcard/WhatsApp/Media/WhatsApp Video",
+            "/sdcard/WhatsApp/Media/WhatsApp Audio",
+            "/sdcard/Android/media/com.whatsapp/WhatsApp/Media",
+            "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents",
+            "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images",
+            "/sdcard/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video",
+            "/storage/emulated/0/WhatsApp/Media",
+            "/storage/emulated/0/WhatsApp/Media/WhatsApp Documents",
+            "/storage/emulated/0/WhatsApp/Media/WhatsApp Images",
+            "/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media",
         };
         
         for (String path : commonPaths) {
             try {
                 java.io.File dir = new java.io.File(path);
                 if (dir.exists() && dir.isDirectory()) {
-                    Log.d(TAG, "   Scanning: " + path);
+                    String indicator = "";
+                    if (path.contains("WhatsApp")) {
+                        indicator = " ⭐ ";
+                    }
+                    Log.d(TAG, "   Scanning:" + indicator + path);
                     scanDirectory(dir, fileList, 0);
                 }
             } catch (Exception e) {
