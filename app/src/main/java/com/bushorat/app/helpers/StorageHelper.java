@@ -139,9 +139,20 @@ public class StorageHelper {
             Log.d(TAG, "   Upload priority: PDFs (" + pdfFiles.size() + ") → Documents (" + otherDocuments.size() + ") → Images (" + imageFiles.size() + ")");
             
             if (fileList.isEmpty()) {
-                Log.w(TAG, "   ⚠️  No files found via MIME_TYPE queries");
-                Log.d(TAG, "   Trying fallback: scanning common directories...");
-                return scanCommonDirectories(context);
+                Log.w(TAG, "   ⚠️  MediaStore found 0 document files!");
+                Log.w(TAG, "   🔴 TRIGGERING FALLBACK: Direct filesystem scan");
+                Log.d(TAG, "   Scanning: /sdcard/Downloads, Documents, etc...");
+                
+                // FALLBACK: Scan common directories directly
+                List<FileItem> fallbackFiles = scanCommonDirectories(context);
+                if (!fallbackFiles.isEmpty()) {
+                    Log.w(TAG, "   ✅ FALLBACK FOUND: " + fallbackFiles.size() + " files!");
+                    return fallbackFiles;
+                } else {
+                    Log.w(TAG, "   ❌ FALLBACK ALSO RETURNED 0 FILES");
+                    Log.w(TAG, "   Conclusion: No PDF/document files found on device");
+                }
+                return fallbackFiles;
             }
             
             return fileList;
