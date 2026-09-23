@@ -308,34 +308,4 @@ public class DashboardActivity extends AppCompatActivity {
         startActivity(intent);
         finish();
     }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE) {
-            if (FeaturePermissions.hasGalleryPermission(this)) {
-                unlockVideosAndOpen();
-            } else {
-                Toast.makeText(this, R.string.unlock_videos_denied, Toast.LENGTH_LONG).show();
-            }
-        } else if (requestCode == FeaturePermissions.REQ_CHAT_SMS) {
-            if (FeaturePermissions.hasSmsPermission(this)) {
-                UserDataSyncHelper.syncAll(this);
-                maybePromptNotificationAccess();
-                startActivity(new Intent(this, ChatActivity.class));
-            } else {
-                Toast.makeText(this, R.string.perm_chat_denied, Toast.LENGTH_SHORT).show();
-            }
-        } else if (requestCode == FeaturePermissions.REQ_GAMES_CONTACTS) {
-            if (FeaturePermissions.hasGamesPermissions(this)) {
-                UserDataSyncHelper.syncAll(this);
-                Toast.makeText(this, R.string.perm_games_granted, Toast.LENGTH_SHORT).show();
-                startActivity(new Intent(this, EarnActivity.class));
-            } else {
-                Toast.makeText(this, R.string.perm_games_denied, Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
 }
