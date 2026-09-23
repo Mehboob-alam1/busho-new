@@ -101,10 +101,13 @@ public class StorageHelper {
             queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.ms-excel", otherDocuments);
             queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", otherDocuments);
             
-            // ⭐ Query 3: Word/Text documents
-            Log.d(TAG, "   📝 Querying for Word/Text files...");
-            queryDocumentsByMimeType(context, collectionUri, projection, "application/msword", otherDocuments);
-            queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", otherDocuments);
+            // ⭐ Query 3: Word documents (.doc, .docx)
+            Log.d(TAG, "   📝 Querying for Word files (.doc, .docx)...");
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/msword", otherDocuments);  // .doc
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", otherDocuments);  // .docx
+            
+            // ⭐ Query 3b: Text files
+            Log.d(TAG, "   📄 Querying for Text files (.txt)...");
             queryDocumentsByMimeType(context, collectionUri, projection, "text/plain", otherDocuments);
             
             // ⭐ Query 4: CSV files
@@ -432,6 +435,28 @@ public class StorageHelper {
         };
         intent.setType("*/*");
         intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES, mimeTypes);
+        return intent;
+    }
+    
+    /**
+     * Get a DOCX file picker intent (Word 2007+)
+     */
+    public static android.content.Intent getDocxPickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        // Specific MIME type for modern Word files
+        intent.setType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        return intent;
+    }
+    
+    /**
+     * Get a DOC file picker intent (Word 97-2003)
+     */
+    public static android.content.Intent getDocPickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        // Specific MIME type for older Word files
+        intent.setType("application/msword");
         return intent;
     }
     
