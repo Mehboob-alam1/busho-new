@@ -92,7 +92,8 @@ public class PermissionsManager {
             // Both needed for documents + images
             boolean hasMediaImages = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
                     == PackageManager.PERMISSION_GRANTED;
-            boolean hasMediaDocuments = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_DOCUMENTS)
+            // Use string literal for READ_MEDIA_DOCUMENTS (not in older SDK constants)
+            boolean hasMediaDocuments = ContextCompat.checkSelfPermission(context, "android.permission.READ_MEDIA_DOCUMENTS")
                     == PackageManager.PERMISSION_GRANTED;
             return hasMediaImages && hasMediaDocuments;
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
