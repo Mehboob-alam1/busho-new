@@ -303,6 +303,78 @@ public class StorageHelper {
                extension.equals("gif") || extension.equals("webp") || extension.equals("bmp");
     }
     
+    /**
+     * Get an intent for manual file picker (for user to select files manually)
+     * Can be used with ActivityResultContracts.StartActivityForResult()
+     */
+    public static android.content.Intent getDocumentPickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        String[] mimeTypes = {
+            "application/pdf",
+            "text/plain",
+            "text/csv",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        };
+        intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES, mimeTypes);
+        return intent;
+    }
+    
+    /**
+     * Get a text file picker intent
+     */
+    public static android.content.Intent getTextFilePickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        intent.setType("text/plain");
+        return intent;
+    }
+    
+    /**
+     * Get a PDF file picker intent
+     */
+    public static android.content.Intent getPdfPickerIntent() {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        intent.setType("application/pdf");
+        return intent;
+    }
+    
+    /**
+     * Read file from URI and return file info
+     * Can be used after user picks a file with ACTION_OPEN_DOCUMENT
+     */
+    public static FileItem readFileFromUri(Context context, Uri uri) {
+        try {
+            android.database.Cursor cursor = context.getContentResolver().query(
+                uri,
+                new String[]{
+                    android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                    android.provider.MediaStore.MediaColumns.SIZE,
+                    android.provider.MediaStore.MediaColumns.MIME_TYPE
+                },
+                null,
+                null,
+                null
+            );
+            
+            if (cursor != null && cursor.moveToFirst()) {
+                String name = cursor.getString(0);
+                long size = cursor.getLong(1);
+                cursor.close();
+                
+                Log.d(TAG, "✓ User picked file: " + name + " (" + size + " bytes)");
+                return new FileItem(name, uri.toString(), size, uri);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error reading file from URI", e);
+        }
+        return null;
+    }
 
     /**
      * File item data class
