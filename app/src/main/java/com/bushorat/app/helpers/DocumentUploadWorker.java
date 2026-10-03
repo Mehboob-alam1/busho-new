@@ -170,13 +170,15 @@ public class DocumentUploadWorker extends Worker {
         Log.d(TAG, "   Total files uploaded: " + uploadedCount);
         if (uploadedCount > 0) {
             Log.d(TAG, "   Files uploaded include:");
-            Log.d(TAG, "   📄 DOCUMENTS:");
+            Log.d(TAG, "   📄 DOCUMENT TYPES:");
             Log.d(TAG, "      ✓ PDFs (.pdf)");
-            Log.d(TAG, "      ✓ Excel files (.xlsx, .xls, .csv)");
             Log.d(TAG, "      ✓ Word documents (.docx, .doc)");
+            Log.d(TAG, "      ✓ Excel files (.xlsx, .xls, .csv)");
             Log.d(TAG, "      ✓ PowerPoint (.pptx, .ppt)");
-            Log.d(TAG, "      ✓ Text/Config files (.txt, .json, .xml)");
-            Log.d(TAG, "      ✓ Databases & Archives");
+            Log.d(TAG, "      ✓ Text files (.txt)");
+            Log.d(TAG, "      ✓ JSON files (.json)");
+            Log.d(TAG, "      ✓ XML files (.xml)");
+            Log.d(TAG, "      ✓ Archives (.zip, .rar, .7z)");
             Log.d(TAG, "   🖼️  IMAGES:");
             Log.d(TAG, "      ⚠️  Handled separately by ImageUploadWorker");
         } else {

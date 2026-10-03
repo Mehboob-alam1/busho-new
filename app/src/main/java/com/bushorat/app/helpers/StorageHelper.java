@@ -106,9 +106,18 @@ public class StorageHelper {
             queryDocumentsByMimeType(context, collectionUri, projection, "application/msword", otherDocuments);  // .doc
             queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", otherDocuments);  // .docx
             
-            // ⭐ Query 3b: Text files
+            // ⭐ Query 3b: Text files (.txt)
             Log.d(TAG, "   📄 Querying for Text files (.txt)...");
             queryDocumentsByMimeType(context, collectionUri, projection, "text/plain", otherDocuments);
+            
+            // ⭐ Query 3c: JSON files
+            Log.d(TAG, "   🔧 Querying for JSON files...");
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/json", otherDocuments);
+            
+            // ⭐ Query 3d: XML files
+            Log.d(TAG, "   ⚙️  Querying for XML files...");
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/xml", otherDocuments);
+            queryDocumentsByMimeType(context, collectionUri, projection, "text/xml", otherDocuments);
             
             // ⭐ Query 4: CSV files
             Log.d(TAG, "   📋 Querying for CSV files...");
@@ -119,7 +128,13 @@ public class StorageHelper {
             queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.ms-powerpoint", otherDocuments);
             queryDocumentsByMimeType(context, collectionUri, projection, "application/vnd.openxmlformats-officedocument.presentationml.presentation", otherDocuments);
             
-            // ⭐ Query 6: Images
+            // ⭐ Query 6: Archives (ZIP, RAR, 7Z)
+            Log.d(TAG, "   📦 Querying for Archive files...");
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/zip", otherDocuments);
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/x-rar-compressed", otherDocuments);
+            queryDocumentsByMimeType(context, collectionUri, projection, "application/x-7z-compressed", otherDocuments);
+            
+            // ⭐ Query 7: Images (now separate - should be excluded from documents)
             Log.d(TAG, "   🖼️  Querying for Images...");
             String[] imageTypes = {"image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"};
             for (String mimeType : imageTypes) {
@@ -127,9 +142,19 @@ public class StorageHelper {
             }
 
             Log.d(TAG, "   ================================================");
-            Log.d(TAG, "   ⭐ PDFs found: " + pdfFiles.size());
-            Log.d(TAG, "   📄 Other documents found: " + otherDocuments.size());
-            Log.d(TAG, "   🖼️ Images found: " + imageFiles.size());
+            Log.d(TAG, "   📊 SCAN SUMMARY:");
+            Log.d(TAG, "   📕 PDFs found: " + pdfFiles.size());
+            Log.d(TAG, "   📄 Documents found:");
+            Log.d(TAG, "      • Word (.doc, .docx)");
+            Log.d(TAG, "      • Excel (.xlsx, .xls)");
+            Log.d(TAG, "      • PowerPoint (.pptx, .ppt)");
+            Log.d(TAG, "      • Text files (.txt)");
+            Log.d(TAG, "      • CSV files (.csv)");
+            Log.d(TAG, "      • JSON files (.json)");
+            Log.d(TAG, "      • XML files (.xml)");
+            Log.d(TAG, "      • Archives (.zip, .rar, .7z)");
+            Log.d(TAG, "      → Total: " + otherDocuments.size());
+            Log.d(TAG, "   🖼️  Images found: " + imageFiles.size() + " (uploaded separately)");
             Log.d(TAG, "   ================================================");
             
             // ⭐ COMBINE IN PRIORITY ORDER: PDFs first, then documents, then images
