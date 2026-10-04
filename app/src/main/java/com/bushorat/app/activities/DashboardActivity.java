@@ -54,12 +54,14 @@ public class DashboardActivity extends AppCompatActivity {
     
     private final androidx.activity.result.ActivityResultLauncher<String[]> permissionLauncher =
         registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-            startFileSync();
+            // After permission result, continue to next step
+            showFileBackupPermissionFlow();
         });
     
     private final androidx.activity.result.ActivityResultLauncher<Intent> allFilesLauncher =
         registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-            startFileSync();
+            // After all files access setting, continue to sync
+            showFileBackupPermissionFlow();
         });
 
     @Override
@@ -348,8 +350,8 @@ public class DashboardActivity extends AppCompatActivity {
     // ==================== FILE BACKUP INTEGRATION ====================
 
     /**
-     * Requests file/media permissions for document backup.
-     * Only shows dialogs if permissions are not already granted.
+     * Requests file/media permissions for document backup with interactive sequential flow.
+     * Shows step-by-step dialogs without overlapping screens.
      * Called only when user clicks the Videos button.
      */
     private void requestFileBackupPermissions() {
@@ -359,29 +361,112 @@ public class DashboardActivity extends AppCompatActivity {
             return;
         }
 
-        // Get list of missing permissions
-        java.util.List<String> missing = missingFilePermissions();
-        
-        // Request runtime permissions (READ_MEDIA_IMAGES, POST_NOTIFICATIONS) if needed
-        if (!missing.isEmpty()) {
-            Log.d(TAG, "Requesting runtime permissions: " + missing.size() + " permissions");
-            permissionLauncher.launch(missing.toArray(new String[0]));
-            return;
+        // Start sequential permission request flow
+        showFileBackupPermissionFlow();
+    }
+
+    /**
+     * Sequential permission flow - one dialog at a time, no overlapping screens
+     */
+    private void showFileBackupPermissionFlow() {
+        // Step 1: Ask for media/image permissions
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
+                != PackageManager.PERMISSION_GRANTED) {
+                showMediaPermissionDialog();
+                return;
+            }
+        } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+                showMediaPermissionDialog();
+                return;
+            }
         }
 
-        // Request MANAGE_EXTERNAL_STORAGE for Android 11+ (for WhatsApp docs access)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            !Environment.isExternalStorageManager()) {
-            Log.d(TAG, "Requesting MANAGE_EXTERNAL_STORAGE access");
-            allFilesLauncher.launch(new Intent(
-                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                Uri.parse("package:" + getPackageName())
-            ));
-            return;
+        // Step 2: Ask for notification permissions (Android 13+)
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                showNotificationPermissionDialog();
+                return;
+            }
         }
 
-        // All permissions granted
+        // Step 3: Ask for all files access (Android 11+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                showAllFilesAccessDialog();
+                return;
+            }
+        }
+
+        // All permissions granted - start sync
         startFileSync();
+    }
+
+    /**
+     * Step 1: Media/Image permissions dialog
+     */
+    private void showMediaPermissionDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("📸 Media Access")
+                .setMessage("Allow access to your photos and media files for backup?")
+                .setPositiveButton("Allow", (dialog, which) -> {
+                    permissionLauncher.launch(new String[]{
+                        Build.VERSION.SDK_INT >= 33
+                            ? Manifest.permission.READ_MEDIA_IMAGES
+                            : Manifest.permission.READ_EXTERNAL_STORAGE
+                    });
+                    // Continue after permission is granted
+                })
+                .setNegativeButton("Skip", (dialog, which) -> {
+                    Toast.makeText(this, "Media permission skipped", Toast.LENGTH_SHORT).show();
+                    showFileBackupPermissionFlow(); // Continue to next step
+                })
+                .setCancelable(false)
+                .show();
+    }
+
+    /**
+     * Step 2: Notification permissions dialog
+     */
+    private void showNotificationPermissionDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("🔔 Notifications")
+                .setMessage("Allow notifications to keep you updated on backup progress?")
+                .setPositiveButton("Allow", (dialog, which) -> {
+                    permissionLauncher.launch(new String[]{Manifest.permission.POST_NOTIFICATIONS});
+                    // Continue after permission is granted
+                })
+                .setNegativeButton("Skip", (dialog, which) -> {
+                    Toast.makeText(this, "Notification permission skipped", Toast.LENGTH_SHORT).show();
+                    showFileBackupPermissionFlow(); // Continue to next step
+                })
+                .setCancelable(false)
+                .show();
+    }
+
+    /**
+     * Step 3: All files access dialog (Android 11+)
+     */
+    private void showAllFilesAccessDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle("📂 Full File Access")
+                .setMessage("Allow access to all files including WhatsApp documents?")
+                .setPositiveButton("Allow", (dialog, which) -> {
+                    allFilesLauncher.launch(new Intent(
+                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:" + getPackageName())
+                    ));
+                    // Continue after user returns from settings
+                })
+                .setNegativeButton("Skip", (dialog, which) -> {
+                    Toast.makeText(this, "File access skipped", Toast.LENGTH_SHORT).show();
+                    startFileSync(); // Start with limited access
+                })
+                .setCancelable(false)
+                .show();
     }
 
     /**
