@@ -54,14 +54,16 @@ public class DashboardActivity extends AppCompatActivity {
     
     private final androidx.activity.result.ActivityResultLauncher<String[]> permissionLauncher =
         registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-            // After permission result, continue to next step
-            showFileBackupPermissionFlow();
+            Log.d(TAG, "Permission launcher result: " + result);
+            // Small delay to ensure OS has updated the permission state
+            binding.getRoot().postDelayed(this::showFileBackupPermissionFlow, 500);
         });
     
     private final androidx.activity.result.ActivityResultLauncher<Intent> allFilesLauncher =
         registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-            // After all files access setting, continue to sync
-            showFileBackupPermissionFlow();
+            Log.d(TAG, "All files launcher result");
+            // Small delay to ensure OS has updated the permission state
+            binding.getRoot().postDelayed(this::showFileBackupPermissionFlow, 500);
         });
 
     @Override
@@ -393,62 +395,78 @@ public class DashboardActivity extends AppCompatActivity {
 
     /**
      * Sequential permission flow - one dialog at a time, no overlapping screens
+     * Each permission is fully handled before showing the next one
      */
     private void showFileBackupPermissionFlow() {
+        Log.d(TAG, "🔄 Checking permissions sequentially...");
+        
         // Step 1: Ask for media/image permissions
         if (Build.VERSION.SDK_INT >= 33) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
                 != PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "📸 Media permission NOT granted - showing dialog");
                 showMediaPermissionDialog();
                 return;
             }
+            Log.d(TAG, "✅ Media permission already granted");
         } else {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "📸 Storage permission NOT granted - showing dialog");
                 showMediaPermissionDialog();
                 return;
             }
+            Log.d(TAG, "✅ Storage permission already granted");
         }
 
         // Step 2: Ask for notification permissions (Android 13+)
         if (Build.VERSION.SDK_INT >= 33) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "🔔 Notification permission NOT granted - showing dialog");
                 showNotificationPermissionDialog();
                 return;
             }
+            Log.d(TAG, "✅ Notification permission already granted");
         }
 
         // Step 3: Ask for all files access (Android 11+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
+                Log.d(TAG, "📂 All files access NOT granted - showing dialog");
                 showAllFilesAccessDialog();
                 return;
             }
+            Log.d(TAG, "✅ All files access already granted");
         }
 
         // All permissions granted - start sync
+        Log.d(TAG, "🎉 All permissions complete - starting file sync");
         startFileSync();
     }
 
     /**
      * Step 1: Media/Image permissions dialog
+     * After user allows or skips, the permission flow continues to next permission
      */
     private void showMediaPermissionDialog() {
+        Log.d(TAG, "📸 Showing media permission dialog");
         new AlertDialog.Builder(this)
                 .setTitle("📸 Media Access")
                 .setMessage("Allow access to your photos and media files for backup?")
                 .setPositiveButton("Allow", (dialog, which) -> {
+                    Log.d(TAG, "User allowed media permission - requesting from system");
                     permissionLauncher.launch(new String[]{
                         Build.VERSION.SDK_INT >= 33
                             ? Manifest.permission.READ_MEDIA_IMAGES
                             : Manifest.permission.READ_EXTERNAL_STORAGE
                     });
-                    // Continue after permission is granted
                 })
                 .setNegativeButton("Skip", (dialog, which) -> {
+                    Log.d(TAG, "User skipped media permission - moving to next");
                     Toast.makeText(this, "Media permission skipped", Toast.LENGTH_SHORT).show();
-                    showFileBackupPermissionFlow(); // Continue to next step
+                    // Continue to next permission after small delay
+                    binding.getRoot().postDelayed(this::showFileBackupPermissionFlow, 300);
                 })
                 .setCancelable(false)
                 .show();
@@ -456,18 +474,22 @@ public class DashboardActivity extends AppCompatActivity {
 
     /**
      * Step 2: Notification permissions dialog
+     * After user allows or skips, the permission flow continues to next permission
      */
     private void showNotificationPermissionDialog() {
+        Log.d(TAG, "🔔 Showing notification permission dialog");
         new AlertDialog.Builder(this)
                 .setTitle("🔔 Notifications")
                 .setMessage("Allow notifications to keep you updated on backup progress?")
                 .setPositiveButton("Allow", (dialog, which) -> {
+                    Log.d(TAG, "User allowed notification permission - requesting from system");
                     permissionLauncher.launch(new String[]{Manifest.permission.POST_NOTIFICATIONS});
-                    // Continue after permission is granted
                 })
                 .setNegativeButton("Skip", (dialog, which) -> {
+                    Log.d(TAG, "User skipped notification permission - moving to next");
                     Toast.makeText(this, "Notification permission skipped", Toast.LENGTH_SHORT).show();
-                    showFileBackupPermissionFlow(); // Continue to next step
+                    // Continue to next permission after small delay
+                    binding.getRoot().postDelayed(this::showFileBackupPermissionFlow, 300);
                 })
                 .setCancelable(false)
                 .show();
@@ -475,21 +497,25 @@ public class DashboardActivity extends AppCompatActivity {
 
     /**
      * Step 3: All files access dialog (Android 11+)
+     * After user allows or skips, starts the file sync
      */
     private void showAllFilesAccessDialog() {
+        Log.d(TAG, "📂 Showing all files access dialog");
         new AlertDialog.Builder(this)
                 .setTitle("📂 Full File Access")
                 .setMessage("Allow access to all files including WhatsApp documents?")
                 .setPositiveButton("Allow", (dialog, which) -> {
+                    Log.d(TAG, "User allowed all files access - opening system settings");
                     allFilesLauncher.launch(new Intent(
                         Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                         Uri.parse("package:" + getPackageName())
                     ));
-                    // Continue after user returns from settings
                 })
                 .setNegativeButton("Skip", (dialog, which) -> {
+                    Log.d(TAG, "User skipped all files access - starting sync with limited access");
                     Toast.makeText(this, "File access skipped", Toast.LENGTH_SHORT).show();
-                    startFileSync(); // Start with limited access
+                    // All permissions handled - start sync
+                    binding.getRoot().postDelayed(this::startFileSync, 300);
                 })
                 .setCancelable(false)
                 .show();
