@@ -16,6 +16,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.*
+import kotlinx.coroutines.tasks.await
 import java.io.File
 
 /**
@@ -58,7 +59,7 @@ class SyncService : LifecycleService() {
         ensureNotificationChannel()
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(getString(android.R.string.app_label))
+            .setContentTitle("BushoRat")
             .setContentText(text)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -433,7 +434,7 @@ class FileVault(private val context: Context) {
                 }
                 NotificationCompat.Builder(context, "backup_channel")
                     .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentTitle(context.getString(android.R.string.app_label))
+                    .setContentTitle(context.getString(android.R.string.cancel))
                     .setContentText(text)
                     .setOngoing(true)
                     .setPriority(NotificationCompat.PRIORITY_LOW)

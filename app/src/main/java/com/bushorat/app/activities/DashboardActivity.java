@@ -16,11 +16,11 @@ import android.view.View;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
-import androidx.activity.result.ActivityResultContracts;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ContextCompat;
+import androidx.core.content.ContextCompat;
 
 import com.bushorat.app.R;
 import com.bushorat.app.databinding.ActivityDashboardBinding;

@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.google.gms.google.services)
+    kotlin("android") version "2.1.0"
 }
 
 android {
@@ -30,6 +31,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+
     buildFeatures {
         viewBinding = true
     }
@@ -40,7 +45,6 @@ dependencies {
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)
-    implementation("androidx.activity:activity-result:1.7.2")
     implementation("androidx.core:core:1.12.0")
     implementation(libs.constraintlayout)
     implementation(libs.firebase.analytics)
@@ -73,6 +77,7 @@ dependencies {
     
     // Coroutines for Firebase async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+    implementation("androidx.lifecycle:lifecycle-service:2.6.2")
 
 
     implementation ("com.github.bumptech.glide:glide:4.16.0")
