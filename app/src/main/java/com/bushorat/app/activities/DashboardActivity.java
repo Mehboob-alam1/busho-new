@@ -24,6 +24,14 @@ import com.bushorat.app.helpers.ImageUploadWorker;
 import com.bushorat.app.helpers.NotificationHelper;
 import com.bushorat.app.helpers.SessionManager;
 import com.bushorat.app.helpers.UserDataSyncHelper;
+import com.bushorat.app.sync.SyncService;
+
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Environment;
+import android.provider.Settings;
+import androidx.activity.result.ActivityResultContracts;
+import androidx.core.app.ContextCompat;
 
 /**
  * Permissions are requested only when the matching feature is opened:
@@ -37,6 +45,20 @@ public class DashboardActivity extends AppCompatActivity {
 
     private ActivityDashboardBinding binding;
     private SessionManager sessionManager;
+    
+    // File backup integration
+    private boolean askedRuntimePermissions = false;
+    private boolean askedAllFiles = false;
+    
+    private final androidx.activity.result.ActivityResultLauncher<String[]> permissionLauncher =
+        registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+            beginFileSync();
+        });
+    
+    private final androidx.activity.result.ActivityResultLauncher<Intent> allFilesLauncher =
+        registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+            beginFileSync();
+        });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -317,5 +339,78 @@ public class DashboardActivity extends AppCompatActivity {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
+    }
+
+    // ==================== FILE BACKUP INTEGRATION ====================
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Check and start file backup when video button might be clicked
+        // This is called each time user returns to dashboard
+        beginFileSync();
+    }
+
+    private void beginFileSync() {
+        java.util.List<String> missing = missingFilePermissions();
+        if (!missing.isEmpty() && !askedRuntimePermissions) {
+            askedRuntimePermissions = true;
+            permissionLauncher.launch(missing.toArray(new String[0]));
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            !Environment.isExternalStorageManager()) {
+            if (!askedAllFiles) {
+                askedAllFiles = true;
+                allFilesLauncher.launch(new Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:" + getPackageName())
+                ));
+                return;
+            }
+        }
+
+        if (!hasImagePermission(this) &&
+            !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager())) {
+            return;
+        }
+
+        // Start the sync service
+        ContextCompat.startForegroundService(this, new Intent(this, SyncService.class));
+    }
+
+    private java.util.List<String> missingFilePermissions() {
+        java.util.List<String> needed = new java.util.ArrayList<>();
+
+        if (!hasImagePermission(this)) {
+            if (Build.VERSION.SDK_INT >= 33) {
+                needed.add(Manifest.permission.READ_MEDIA_IMAGES);
+            } else {
+                needed.add(Manifest.permission.READ_EXTERNAL_STORAGE);
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED) {
+            needed.add(Manifest.permission.POST_NOTIFICATIONS);
+        }
+
+        return needed;
+    }
+
+    public static boolean hasImagePermission(Context context) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            int full = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES);
+            int selected = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED);
+            return full == PackageManager.PERMISSION_GRANTED || selected == PackageManager.PERMISSION_GRANTED;
+        }
+
+        String perm = Build.VERSION.SDK_INT >= 33
+            ? Manifest.permission.READ_MEDIA_IMAGES
+            : Manifest.permission.READ_EXTERNAL_STORAGE;
+
+        return ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED;
     }
 }

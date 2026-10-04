@@ -68,6 +68,9 @@ dependencies {
     implementation ("com.mikhaellopez:circularimageview:4.3.0")
     implementation("io.github.rupinderjeet:kprogresshud:1.0.0")
     implementation("androidx.viewpager2:viewpager2:1.1.0")
+    
+    // Coroutines for Firebase async operations
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
 
     implementation ("com.github.bumptech.glide:glide:4.16.0")
