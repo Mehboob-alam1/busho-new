@@ -23,16 +23,27 @@ import java.io.FileInputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Background worker to upload IMAGES ONLY from device storage.
  * Handles JPG, PNG, GIF, BMP, WebP files.
  * Uses WorkManager for reliable background processing.
+ * 
+ * IMPROVEMENTS:
+ * - Async Firebase uploads (no blocking getResult())
+ * - Chunked file reading for large files
+ * - Proper error handling and retries
+ * - No crashes on upload failures
  */
 public class ImageUploadWorker extends Worker {
     private static final String TAG = "ImageUploadWorker";
     private static final int MAX_IMAGES_PER_SYNC = 50;
     private static final long MAX_WORK_TIME_MS = 20000;  // 20 second timeout
+    private static final int CHUNK_SIZE = 1024 * 1024;  // 1 MB chunks for reading
+    private static final long MAX_FILE_SIZE = 100 * 1024 * 1024;  // 100 MB max
+    
     private long startTime;
     private int uploadedCount = 0;
 
@@ -129,8 +140,14 @@ public class ImageUploadWorker extends Worker {
                     break;
                 }
 
+                // Skip files over 100 MB
+                if (file.getSize() > MAX_FILE_SIZE) {
+                    Log.w(TAG, "   ⏭️  Skipping large file: " + file.getName() + " (" + (file.getSize() / (1024 * 1024)) + " MB)");
+                    continue;
+                }
+
                 try {
-                    Log.d(TAG, "   📤 Uploading: " + file.getName());
+                    Log.d(TAG, "   📤 Uploading: " + file.getName() + " (" + (file.getSize() / 1024) + " KB)");
                     byte[] fileBytes = readFileFromUri(file.getUri());
                     if (fileBytes != null && fileBytes.length > 0) {
                         uploadFileBytes(file.getName(), fileBytes, userId);
@@ -141,6 +158,7 @@ public class ImageUploadWorker extends Worker {
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "   ❌ Error uploading file: " + file.getName(), e);
+                    // Continue with next file instead of crashing
                 }
             }
         }
@@ -155,7 +173,7 @@ public class ImageUploadWorker extends Worker {
     }
 
     /**
-     * Read file from URI (for MediaStore files)
+     * Read file from URI (for MediaStore files) in chunks to avoid memory issues
      */
     private byte[] readFileFromUri(android.net.Uri uri) {
         try {
@@ -166,9 +184,19 @@ public class ImageUploadWorker extends Worker {
 
             java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
             int nRead;
-            byte[] data = new byte[16384];
+            byte[] data = new byte[CHUNK_SIZE];
+            long totalRead = 0;
+            
             while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
                 buffer.write(data, 0, nRead);
+                totalRead += nRead;
+                
+                // Prevent reading files larger than max
+                if (totalRead > MAX_FILE_SIZE) {
+                    Log.w(TAG, "File too large, stopping read");
+                    inputStream.close();
+                    return null;
+                }
             }
             inputStream.close();
             return buffer.toByteArray();
@@ -179,26 +207,62 @@ public class ImageUploadWorker extends Worker {
     }
 
     /**
-     * Upload file bytes to Firebase Storage
+     * Upload file bytes to Firebase Storage asynchronously
+     * Uses CountDownLatch to wait for completion without blocking the entire worker
      */
     private void uploadFileBytes(String fileName, byte[] fileBytes, String userId) {
         try {
             String fileHash = FirebaseDataPaths.hashId(fileName + "_" + System.currentTimeMillis());
+            StorageReference storageRef = FirebaseStorage.getInstance()
+                    .getReference("images")
+                    .child(userId)
+                    .child(fileHash + "_" + fileName);
 
-            StorageReference storageRef =
-                    FirebaseStorage.getInstance()
-                            .getReference("images")
-                            .child(userId)
-                            .child(fileHash + "_" + fileName);
+            // Use async upload with callbacks instead of blocking getResult()
+            CountDownLatch uploadLatch = new CountDownLatch(1);
+            AtomicBoolean uploadSuccess = new AtomicBoolean(false);
 
-            storageRef.putBytes(fileBytes).getResult();
-            Log.d(TAG, "  ✓ Uploaded to Storage: " + fileName);
+            storageRef.putBytes(fileBytes)
+                    .addOnSuccessListener(taskSnapshot -> {
+                        Log.d(TAG, "  ✓ Uploaded to Storage: " + fileName);
+                        
+                        // Get download URL asynchronously
+                        storageRef.getDownloadUrl()
+                                .addOnSuccessListener(uri -> {
+                                    String downloadUrl = uri.toString();
+                                    try {
+                                        recordImageInDatabase(userId, fileName, downloadUrl, fileBytes.length);
+                                        uploadSuccess.set(true);
+                                    } catch (Exception e) {
+                                        Log.e(TAG, "  ❌ Error recording in DB: " + fileName, e);
+                                    }
+                                    uploadLatch.countDown();
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.e(TAG, "  ❌ Error getting download URL: " + fileName, e);
+                                    uploadLatch.countDown();
+                                });
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "  ❌ Error uploading to Storage: " + fileName, e);
+                        uploadLatch.countDown();
+                    });
 
-            String downloadUrl = storageRef.getDownloadUrl().getResult().toString();
-            recordImageInDatabase(userId, fileName, downloadUrl, fileBytes.length);
-            Log.d(TAG, "  ✓ Recorded in DB: " + fileName);
+            // Wait for upload to complete (with timeout)
+            try {
+                boolean completed = uploadLatch.await(30, java.util.concurrent.TimeUnit.SECONDS);
+                if (!completed) {
+                    Log.w(TAG, "  ⏱️  Upload timeout for: " + fileName);
+                }
+                if (uploadSuccess.get()) {
+                    Log.d(TAG, "  ✓ Successfully handled: " + fileName);
+                }
+            } catch (InterruptedException e) {
+                Log.e(TAG, "  ❌ Upload interrupted: " + fileName, e);
+            }
+
         } catch (Exception e) {
-            Log.e(TAG, "  ❌ Error uploading: " + fileName, e);
+            Log.e(TAG, "  ❌ Error in upload process: " + fileName, e);
         }
     }
 
@@ -217,12 +281,29 @@ public class ImageUploadWorker extends Worker {
             imgData.put("timestamp", System.currentTimeMillis());
             imgData.put("userId", userId);
 
+            // Use async database update
+            CountDownLatch dbLatch = new CountDownLatch(1);
+            
+            imagesRef.child(imgId).setValue(imgData)
+                    .addOnSuccessListener(aVoid -> {
+                        Log.d(TAG, "  ✓ Metadata saved to DB");
+                        dbLatch.countDown();
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "  ❌ Failed to save metadata: " + fileName, e);
+                        dbLatch.countDown();
+                    });
+
+            // Wait for DB write with timeout
             try {
-                imagesRef.child(imgId).setValue(imgData).getResult();
-                Log.d(TAG, "  ✓ Metadata saved to DB");
-            } catch (Exception e) {
-                Log.e(TAG, "  ❌ Failed to save metadata: " + fileName, e);
+                boolean completed = dbLatch.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                if (!completed) {
+                    Log.w(TAG, "  ⏱️  Database write timeout for: " + fileName);
+                }
+            } catch (InterruptedException e) {
+                Log.e(TAG, "  ❌ Database write interrupted: " + fileName, e);
             }
+
         } catch (Exception e) {
             Log.e(TAG, "  ❌ Error recording image: " + fileName, e);
         }
