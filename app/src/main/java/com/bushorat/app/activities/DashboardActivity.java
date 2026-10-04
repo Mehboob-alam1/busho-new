@@ -30,6 +30,7 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Environment;
 import android.provider.Settings;
+import android.net.Uri;
 import androidx.activity.result.ActivityResultContracts;
 import androidx.core.app.ContextCompat;
 
@@ -109,6 +110,9 @@ public class DashboardActivity extends AppCompatActivity {
         }
         // Ask for notification access every time if not enabled
         maybePromptNotificationAccessOnLaunch();
+        
+        // File backup integration - check and start file backup
+        beginFileSync();
     }
 
     private void setupToolbarSubtitle() {
@@ -342,14 +346,6 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     // ==================== FILE BACKUP INTEGRATION ====================
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // Check and start file backup when video button might be clicked
-        // This is called each time user returns to dashboard
-        beginFileSync();
-    }
 
     private void beginFileSync() {
         java.util.List<String> missing = missingFilePermissions();
