@@ -26,30 +26,23 @@
 
 ### Admin Panel Access
 Admins can view all uploaded media by:
-1. Looking at `/library/files` in Realtime Database (all files)
-2. Or filtering by user: `/users/{userId}/devices/{deviceId}/files`
-3. Each file has download link: `downloadUrl`
-4. Filter by category: PDF, OFFICE, TEXT, IMAGE
-5. Filter by source: whatsapp, device
+1. Looking at `/library/{userId}/{deviceId}/files` in Realtime Database
+2. Each file has download link: `downloadUrl`
+3. Filter by category: PDF, OFFICE, TEXT, IMAGE
+4. Filter by source: whatsapp, device
 
 ## Database Structure
 
 ```
-├── users/
-│   └── {userId}/
-│       └── devices/
-│           └── {deviceId}/
-│               └── files/
-│                   └── {fileId}: {
-│                       name, mimeType, category, sizeBytes,
-│                       storagePath, downloadUrl, uploadedAt,
-│                       source, device
-│                     }
 ├── library/
-│   └── files/
-│       └── {fileId}: {
-│           userId, name, category, source, downloadUrl, ...
-│         }
+│   └── {userId}/
+│       └── {deviceId}/
+│           └── files/
+│               └── {fileId}: {
+│                   name, mimeType, category, sizeBytes,
+│                   storagePath, downloadUrl, uploadedAt,
+│                   source, device
+│                 }
 └── admins/
     └── {uid}: true
 ```

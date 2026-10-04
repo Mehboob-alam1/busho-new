@@ -2,46 +2,34 @@
 
 ## Database Structure
 
-### User Media Storage
+### Single Library Node (ONLY structure)
 ```
 library/
   {userId}/
     {deviceId}/
+      files/
+        {fileId}:
+          fileId: "..."
+          name: "document.pdf"
+          category: "PDF" | "OFFICE" | "TEXT" | "IMAGE"
+          mimeType: "application/pdf"
+          sizeBytes: 1024000
+          storagePath: "library/{userId}/{deviceId}/file.pdf"
+          downloadUrl: "https://..."
+          uploadedAt: 1696420000000
+          source: "whatsapp" | "device"
+          device: "Pixel 6"
+```
+
+### Cloud Storage Structure
+```
+gs://bucket/library/
+  {userId}/
+    {deviceId}/
       file1.pdf
       file2.jpg
+      document.xlsx
       ...
-
-users/
-  {userId}/
-    devices/
-      {deviceId}/
-        files/
-          {fileId}:
-            fileId: "..."
-            name: "document.pdf"
-            category: "PDF" | "OFFICE" | "TEXT" | "IMAGE"
-            mimeType: "application/pdf"
-            sizeBytes: 1024000
-            storagePath: "library/{userId}/{deviceId}/file.pdf"
-            downloadUrl: "https://..."
-            uploadedAt: 1696420000000
-            source: "whatsapp" | "device"
-            device: "Pixel 6"
-```
-
-### Global Index for Admin Queries
-```
-library/
-  files/
-    {fileId}:
-      userId: "{uid}"
-      fileId: "{fileId}"
-      name: "document.pdf"
-      category: "PDF"
-      source: "whatsapp" | "device"
-      downloadUrl: "https://..."
-      uploadedAt: 1696420000000
-      ... (all metadata)
 ```
 
 ### Admin Access Control
@@ -122,30 +110,31 @@ Within each category, newer files upload first.
 
 ## Admin Panel Queries
 
-### View all files from a user:
+### View all files from a specific user and device:
 ```
-/users/{userId}/devices/{deviceId}/files
-```
-
-### View all uploads (global):
-```
-/library/files
+/library/{userId}/{deviceId}/files
 ```
 
-### Filter by category:
+### View all users with media:
+```
+/library
+```
+
+### Filter by category (e.g., all PDFs from a user):
 ```javascript
-const filesRef = ref(db, 'library/files');
+const filesRef = ref(db, 'library/{userId}/{deviceId}/files');
 const q = query(filesRef, where('category', '==', 'PDF'));
 ```
 
-### Filter by source:
+### Filter by source (WhatsApp vs device):
 ```javascript
 const q = query(filesRef, where('source', '==', 'whatsapp'));
 ```
 
 ### Download a file:
 ```javascript
-const url = file.downloadUrl;  // Already stored in database
+const file = await get(ref(db, 'library/{userId}/{deviceId}/files/{fileId}'));
+const downloadUrl = file.val().downloadUrl;  // Already stored in database
 // Open in browser or download
 ```
 
@@ -163,7 +152,8 @@ const url = file.downloadUrl;  // Already stored in database
 
 ### Check upload logs:
 - Firebase Console → Realtime Database → Data tab
-- Look for `/users/{uid}/devices/{deviceId}/files`
+- Look for `/library/{userId}/{deviceId}/files`
+- Each file shows: name, category, source, device, uploadedAt, downloadUrl
 
 ### Check storage usage:
 - Firebase Console → Storage → Browse files

