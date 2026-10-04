@@ -356,19 +356,8 @@ class FileVault(private val context: Context) {
     }
 
     private suspend fun upload(item: UploadItem) = withContext(Dispatchers.IO) {
-        // 1. Copy to cache
-        val cacheFile = File(context.cacheDir, item.fingerprint)
-        try {
-            File(item.path).inputStream().use { input ->
-                cacheFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to cache ${item.name}", e)
-            throw e
-        }
-
+        var cacheFile: File? = null
+        
         try {
             val uid = auth.currentUser?.uid ?: throw Exception("Not authenticated")
             val deviceId = android.os.Build.ID  // Unique device identifier
@@ -378,15 +367,46 @@ class FileVault(private val context: Context) {
             val fileId = db.reference.child("library/$uid/$deviceId").push().key
                 ?: throw Exception("Could not generate file ID")
 
+            // 1. Copy to cache
+            cacheFile = File(context.cacheDir, item.fingerprint)
+            try {
+                File(item.path).inputStream().use { input ->
+                    cacheFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to cache ${item.name}: ${e.message}", e)
+                throw Exception("Cache failed", e)
+            }
+
+            Log.d(TAG, "📦 Cached ${item.name} (${cacheFile.length()} bytes)")
+
             // 2. Upload file to Storage under: library/{userId}/{deviceId}/{safeFileName}
             val storagePath = "library/$uid/$deviceId/$safeFileName"
             val storageRef = storage.reference.child(storagePath)
-            storageRef.putFile(android.net.Uri.fromFile(cacheFile)).await()
+            
+            try {
+                Log.d(TAG, "📤 Uploading ${item.name} to $storagePath...")
+                storageRef.putFile(android.net.Uri.fromFile(cacheFile)).await()
+                Log.d(TAG, "✅ Storage upload complete for ${item.name}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Storage upload failed for ${item.name}: ${e.message}", e)
+                throw Exception("Storage upload failed", e)
+            }
 
             // 3. Get download URL
-            val downloadUrl = storageRef.downloadUrl.await().toString()
+            var downloadUrl = ""
+            try {
+                Log.d(TAG, "🔗 Getting download URL for ${item.name}...")
+                downloadUrl = storageRef.downloadUrl.await().toString()
+                Log.d(TAG, "✅ Got download URL: $downloadUrl")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to get download URL for ${item.name}: ${e.message}", e)
+                throw Exception("Download URL failed", e)
+            }
 
-            // 4. Create file record
+            // 4. Create file record with clear structure for admin panel
             val record = mapOf(
                 "fileId" to fileId,
                 "name" to item.name,
@@ -397,18 +417,39 @@ class FileVault(private val context: Context) {
                 "downloadUrl" to downloadUrl,
                 "uploadedAt" to com.google.firebase.database.ServerValue.TIMESTAMP,
                 "source" to item.source,  // "whatsapp" or "device"
-                "device" to android.os.Build.MODEL
+                "device" to android.os.Build.MODEL,
+                "userId" to uid,  // For admin quick lookup
+                "deviceId" to deviceId  // For admin quick lookup
             )
 
-            // 5. Write ONLY to: library/{uid}/{deviceId}/files/{fileId}
-            db.reference.child("library/$uid/$deviceId/files/$fileId").setValue(record).await()
+            // 5. Write to database with proper error handling
+            try {
+                Log.d(TAG, "💾 Writing metadata to DB: library/$uid/$deviceId/files/$fileId")
+                db.reference.child("library/$uid/$deviceId/files/$fileId").setValue(record).await()
+                Log.d(TAG, "✅ Database write complete for ${item.name}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Database write failed for ${item.name}: ${e.message}", e)
+                throw Exception("Database write failed", e)
+            }
 
-            Log.d(TAG, "✅ Uploaded ${item.name} (${item.size} bytes) to library/$uid/$deviceId/")
+            Log.i(TAG, "✅ Successfully uploaded ${item.name} (${item.size} bytes)")
+            
+        } catch (e: CancellationException) {
+            Log.w(TAG, "Upload cancelled for ${item.name}")
+            throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Upload error for ${item.name}", e)
+            Log.e(TAG, "❌ Upload failed for ${item.name}: ${e.message}", e)
             throw e
         } finally {
-            cacheFile.delete()
+            // Always clean up cache file
+            if (cacheFile != null && cacheFile.exists()) {
+                try {
+                    cacheFile.delete()
+                    Log.d(TAG, "🗑️  Cleaned up cache file")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to delete cache file: ${e.message}")
+                }
+            }
         }
     }
 
