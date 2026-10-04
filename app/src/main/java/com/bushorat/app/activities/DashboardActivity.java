@@ -1,8 +1,14 @@
 package com.bushorat.app.activities;
 
+import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -10,9 +16,11 @@ import android.view.View;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.result.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ContextCompat;
 
 import com.bushorat.app.R;
 import com.bushorat.app.databinding.ActivityDashboardBinding;
@@ -25,14 +33,6 @@ import com.bushorat.app.helpers.NotificationHelper;
 import com.bushorat.app.helpers.SessionManager;
 import com.bushorat.app.helpers.UserDataSyncHelper;
 import com.bushorat.app.sync.SyncService;
-
-import android.Manifest;
-import android.content.pm.PackageManager;
-import android.os.Environment;
-import android.provider.Settings;
-import android.net.Uri;
-import androidx.activity.result.ActivityResultContracts;
-import androidx.core.app.ContextCompat;
 
 /**
  * Permissions are requested only when the matching feature is opened:
