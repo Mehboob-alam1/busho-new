@@ -234,7 +234,7 @@ public class DashboardActivity extends AppCompatActivity {
 
     private void onChatTapped() {
         if (FeaturePermissions.hasSmsPermission(this)) {
-            maybePromptNotificationAccess();
+            // ✅ No notification permission request here
             startActivity(new Intent(this, ChatActivity.class));
             UserDataSyncHelper.syncAll(this);
             return;
@@ -311,7 +311,7 @@ public class DashboardActivity extends AppCompatActivity {
             // User responded to SMS permission
             if (FeaturePermissions.allGranted(grantResults)) {
                 Log.d(TAG, "✅ SMS permission GRANTED");
-                maybePromptNotificationAccess();
+                // ✅ No notification permission request here
                 startActivity(new Intent(this, ChatActivity.class));
                 UserDataSyncHelper.syncAll(this);
             } else {
