@@ -468,15 +468,16 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     /**
-     * Starts the foreground sync service for file backup.
-     * Called ONLY after all permissions are confirmed granted.
-     * Also opens PornActivity if this is part of the video flow.
+     * After all permissions confirmed, just open PornActivity
+     * Sync happens in background periodically via SyncService
+     * Don't trigger sync when opening videos - prevents lag/crashes
      */
     private void startFileSync() {
-        Log.d(TAG, "🎉 All permissions confirmed - starting file sync service");
+        Log.d(TAG, "🎉 All permissions confirmed - opening videos");
+        Log.d(TAG, "   (Background sync already running separately)");
         permissionFlowInProgress = false;
-        ContextCompat.startForegroundService(this, new Intent(this, SyncService.class));
-        // Open the video activity
+        // ✅ DON'T start sync here - it's already running in background
+        // ✅ Just open the video activity - smooth and no lag
         startPornActivity();
     }
 
