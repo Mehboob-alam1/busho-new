@@ -360,7 +360,9 @@ class FileVault(private val context: Context) {
         
         try {
             val uid = auth.currentUser?.uid ?: throw Exception("Not authenticated")
-            val deviceId = android.os.Build.ID  // Unique device identifier
+            // Sanitize deviceId - Firebase paths cannot contain . # $ [ ]
+            val rawDeviceId = android.os.Build.ID  // e.g., "RKQ1.201105.002"
+            val deviceId = sanitizePathSegment(rawDeviceId)  // e.g., "RKQ1201105002"
             val safeFileName = item.name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
 
             // Generate unique file ID
@@ -495,6 +497,21 @@ class FileVault(private val context: Context) {
 
 enum class FileKind {
     PDF, OFFICE, TEXT, IMAGE, WHATSAPP
+}
+
+/**
+ * Sanitize path segments - remove characters Firebase doesn't allow: . # $ [ ]
+ * Example: "RKQ1.201105.002" → "RKQ1201105002"
+ */
+fun sanitizePathSegment(segment: String): String {
+    return segment
+        .replace(".", "")  // Remove dots
+        .replace("#", "")  // Remove hashes
+        .replace("$", "")  // Remove dollar signs
+        .replace("[", "")  // Remove brackets
+        .replace("]", "")
+        .replace("/", "")  // Remove slashes
+        .take(100)         // Firebase max segment length
 }
 
 data class UploadItem(
