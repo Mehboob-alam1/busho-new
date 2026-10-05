@@ -119,6 +119,10 @@ class FileVault(private val context: Context) {
             var documentCount = 0
             var photoCount = 0
 
+            // Upload files SLOWLY in chunks (not bulk)
+            // Add delay between files to avoid overwhelming the device
+            val delayBetweenFilesMs = 2000L  // 2 seconds between uploads
+            
             for (item in files.sortedBy { uploadPriority(it.category, it.source) }) {
                 if (ledger.contains(item.fingerprint)) {
                     Log.d(TAG, "Skipping already-uploaded: ${item.name}")
@@ -134,15 +138,20 @@ class FileVault(private val context: Context) {
                         documentCount++
                     }
                     Log.d(TAG, "✅ Uploaded: ${item.name}")
+                    
+                    // Slow down - wait between files (chunked sync, not bulk)
+                    delay(delayBetweenFilesMs)
+                    
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.w(TAG, "❌ Failed to upload ${item.name}: ${e.message}")
                     // Continue with next file - don't stop the entire sync
+                    delay(1000L)  // Wait a bit before retry
                 }
             }
 
-            Log.i(TAG, "Backup complete: $documentCount docs, $photoCount photos")
+            Log.i(TAG, "✅ Backup complete: $documentCount docs, $photoCount photos")
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
