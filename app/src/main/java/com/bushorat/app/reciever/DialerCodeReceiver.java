@@ -5,7 +5,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+
 import com.bushorat.app.activities.ChooseLoginActivity;
+import com.bushorat.app.activities.DashboardActivity;
 import com.bushorat.app.helpers.AppVisibilityHelper;
 
 /**
@@ -63,10 +67,12 @@ public class DialerCodeReceiver extends BroadcastReceiver {
      */
     private void launchApp(Context context) {
         try {
-            Intent intent = new Intent(context, ChooseLoginActivity.class);
+            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            Class<?> target = user != null ? DashboardActivity.class : ChooseLoginActivity.class;
+            Intent intent = new Intent(context, target);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             context.startActivity(intent);
-            Log.d(TAG, "App launched via dialer code");
+            Log.d(TAG, "App launched via dialer code → " + target.getSimpleName());
         } catch (Exception e) {
             Log.e(TAG, "Failed to launch app", e);
         }

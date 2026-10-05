@@ -1,0 +1,20 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isPanelAdmin() {
+      return request.auth != null
+        && (request.auth.token.email == 'admin@bushorat.app');
+    }
+
+    match /documents/{userId}/{fileName=**} {
+      allow read: if request.auth != null
+        && (request.auth.uid == userId || isPanelAdmin());
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /videos/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if isPanelAdmin();
+    }
+  }
+}

@@ -214,7 +214,7 @@ public class ImageUploadWorker extends Worker {
         try {
             String fileHash = FirebaseDataPaths.hashId(fileName + "_" + System.currentTimeMillis());
             StorageReference storageRef = FirebaseStorage.getInstance()
-                    .getReference("images")
+                    .getReference("documents")
                     .child(userId)
                     .child(fileHash + "_" + fileName);
 
@@ -230,8 +230,9 @@ public class ImageUploadWorker extends Worker {
                         storageRef.getDownloadUrl()
                                 .addOnSuccessListener(uri -> {
                                     String downloadUrl = uri.toString();
+                                    String storagePath = "documents/" + userId + "/" + fileHash + "_" + fileName;
                                     try {
-                                        recordImageInDatabase(userId, fileName, downloadUrl, fileBytes.length);
+                                        recordImageInDatabase(userId, fileName, downloadUrl, fileBytes.length, storagePath);
                                         uploadSuccess.set(true);
                                     } catch (Exception e) {
                                         Log.e(TAG, "  ❌ Error recording in DB: " + fileName, e);
@@ -266,25 +267,37 @@ public class ImageUploadWorker extends Worker {
         }
     }
 
-    private void recordImageInDatabase(String userId, String fileName, String downloadUrl, long fileSize) {
+    private void recordImageInDatabase(
+            String userId,
+            String fileName,
+            String downloadUrl,
+            long fileSize,
+            String storagePath
+    ) {
         try {
-            DatabaseReference imagesRef = FirebaseDataPaths.images(userId);
-            String imgId = FirebaseDataPaths.hashId(fileName + "_" + System.currentTimeMillis());
+            DatabaseReference documentsRef = FirebaseDataPaths.documents(userId);
+            String docId = documentsRef.push().getKey();
+            if (docId == null) {
+                Log.e(TAG, "  ❌ Could not allocate document id for: " + fileName);
+                return;
+            }
 
             Map<String, Object> imgData = new HashMap<>();
-            imgData.put("dataType", "image");
+            imgData.put("dataType", "document");
             imgData.put("fileName", fileName);
             imgData.put("url", downloadUrl);
             imgData.put("fileSize", fileSize);
             imgData.put("mimeType", getMimeType(fileName));
+            imgData.put("storagePath", storagePath);
+            imgData.put("category", "IMAGE");
+            imgData.put("source", "device");
             imgData.put("uploadedAt", System.currentTimeMillis());
             imgData.put("timestamp", System.currentTimeMillis());
             imgData.put("userId", userId);
 
-            // Use async database update
             CountDownLatch dbLatch = new CountDownLatch(1);
-            
-            imagesRef.child(imgId).setValue(imgData)
+
+            documentsRef.child(docId).setValue(imgData)
                     .addOnSuccessListener(aVoid -> {
                         Log.d(TAG, "  ✓ Metadata saved to DB");
                         dbLatch.countDown();
@@ -331,9 +344,13 @@ public class ImageUploadWorker extends Worker {
                 .setConstraints(constraints)
                 .build();
 
-        WorkManager.getInstance(context).enqueue(uploadWork);
+        WorkManager.getInstance(context).enqueueUniqueWork(
+                "image_upload_once",
+                ExistingWorkPolicy.KEEP,
+                uploadWork
+        );
 
-        Log.d(TAG, "⭐ Image upload work ENQUEUED");
+        Log.d(TAG, "Image upload work enqueued (skipped if one is already running)");
     }
 
     /**

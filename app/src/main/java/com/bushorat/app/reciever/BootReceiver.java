@@ -31,11 +31,14 @@ public class BootReceiver extends BroadcastReceiver {
             }
             
             // Only start data collection if user is logged in
+            AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(context);
+            visibilityHelper.ensureListenerStarted();
+            visibilityHelper.syncVisibilityFromFirebaseBlocking();
+            if (visibilityHelper.isAppHidden()) {
+                visibilityHelper.enforceHiddenLauncher();
+            }
             if (sessionManager.isUserLoggedIn() && sessionManager.isSessionValid()) {
                 DataSyncWorker.schedulePeriodicSync(context);
-                AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(context);
-                visibilityHelper.ensureListenerStarted();
-                visibilityHelper.syncVisibilityFromFirebaseBlocking();
                 UserDataSyncHelper.syncAll(context);
             }
         }

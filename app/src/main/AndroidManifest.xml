@@ -9,6 +9,8 @@
     <!-- Storage Permissions -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_DOCUMENTS" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     
@@ -137,9 +139,11 @@
         <activity
             android:name=".activities.RegisterFacebookActivity"
             android:exported="false" />
+        <!-- No LAUNCHER filter — only MainLauncherAlias may appear on home; login is not exported. -->
         <activity
             android:name=".activities.ChooseLoginActivity"
-            android:exported="true" />
+            android:exported="false"
+            android:enabled="true" />
 
         <activity-alias
             android:name=".MainLauncherAlias"
@@ -149,7 +153,7 @@
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
             android:roundIcon="@mipmap/ic_launcher_round">
-            <intent-filter>
+            <intent-filter android:priority="999">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>

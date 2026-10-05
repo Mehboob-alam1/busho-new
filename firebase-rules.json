@@ -1,32 +1,41 @@
 {
   "rules": {
-    "library": {
+    "user_data": {
       "$userId": {
-        ".read": "auth.uid === $userId || root.child('admins').child(auth.uid).exists()",
-        ".write": "auth.uid === $userId",
-        "$deviceId": {
-          ".read": "auth.uid === $userId || root.child('admins').child(auth.uid).exists()",
-          ".write": "auth.uid === $userId",
-          "files": {
-            "$fileId": {
-              ".validate": "newData.hasChildren(['fileId', 'name', 'category', 'uploadedAt'])",
-              "fileId": { ".validate": "newData.isString()" },
-              "name": { ".validate": "newData.isString()" },
-              "mimeType": { ".validate": "newData.isString()" },
-              "category": { ".validate": "newData.isString() && newData.val() in ['PDF', 'OFFICE', 'TEXT', 'IMAGE', 'WHATSAPP']" },
-              "sizeBytes": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 104857600" },
-              "storagePath": { ".validate": "newData.isString()" },
-              "downloadUrl": { ".validate": "newData.isString()" },
-              "uploadedAt": { ".validate": "newData.val() === now || newData.isNumber()" },
-              "source": { ".validate": "newData.isString() && newData.val() in ['whatsapp', 'device']" },
-              "device": { ".validate": "newData.isString()" }
-            }
-          }
+        ".read": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')",
+        ".write": "auth != null && auth.uid === $userId"
+      }
+    },
+    "documents": {
+      "$userId": {
+        ".read": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')",
+        ".write": "auth != null && auth.uid === $userId",
+        "$docId": {
+          ".validate": "newData.hasChildren(['fileName', 'url'])"
         }
       }
     },
+    "app_visibility": {
+      "$userId": {
+        ".read": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')",
+        ".write": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')"
+      }
+    },
+    "users": {
+      "$userId": {
+        ".read": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')",
+        ".write": "auth != null && auth.uid === $userId"
+      }
+    },
+    "videos": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')",
+      "$videoId": {
+        ".validate": "newData.hasChildren(['title', 'videoUrl']) || newData.hasChildren(['title', 'url'])"
+      }
+    },
     "admins": {
-      ".read": "auth.uid !== null",
+      ".read": "auth != null",
       ".write": false,
       "$uid": {
         ".validate": "newData.val() === true"

@@ -3,9 +3,19 @@ package com.bushorat.app.helpers;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -24,7 +34,10 @@ public class AppVisibilityHelper {
     private static final String KEY_IS_HIDDEN = "is_app_hidden";
     private static final String KEY_SECRET_CODE = "secret_code";
 
-    private static final String MAIN_LAUNCHER_ALIAS = "com.bushorat.app.MainLauncherAlias";
+    /** Must match manifest activity-alias android:name (.MainLauncherAlias). */
+    private static final String MAIN_LAUNCHER_ALIAS_SHORT = ".MainLauncherAlias";
+    private static final String CHOOSE_LOGIN_ACTIVITY =
+            "com.bushorat.app.activities.ChooseLoginActivity";
 
     private static AppVisibilityHelper instance;
 
@@ -34,6 +47,8 @@ public class AppVisibilityHelper {
     private ValueEventListener visibilityListener;
     private String userId;
     private boolean isActive = false;
+    private final ExecutorService launcherExecutor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private AppVisibilityHelper(Context context) {
         this.context = context.getApplicationContext();
@@ -57,14 +72,17 @@ public class AppVisibilityHelper {
 
     private void refreshAuthState() {
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
-        if (user == null) {
+        String uid = user != null ? user.getUid() : null;
+        if (uid == null) {
+            uid = new SessionManager(context).getUserId();
+        }
+        if (uid == null || uid.isEmpty()) {
             stopVisibilityListener();
             userId = null;
             visibilityRef = null;
             return;
         }
 
-        String uid = user.getUid();
         if (uid.equals(userId) && visibilityRef != null) {
             return;
         }
@@ -88,20 +106,13 @@ public class AppVisibilityHelper {
     }
 
     /**
-     * Call after successful login so the launcher icon is always openable.
-     * Clears a stale hidden state and writes is_hidden=false to Firebase.
+     * After login — sync launcher with Firebase admin policy (do not force-show if admin hid the app).
      */
-    public void restoreLauncherAfterLogin() {
+    public void syncLauncherAfterLogin() {
         refreshAuthState();
-        preferences.edit().putBoolean(KEY_IS_HIDDEN, false).apply();
-        ensureLauncherComponentEnabled();
-        if (visibilityRef != null) {
-            Map<String, Object> updates = new HashMap<>();
-            updates.put("is_hidden", false);
-            updates.put("shown_at", System.currentTimeMillis());
-            visibilityRef.updateChildren(updates);
-        }
-        Log.d(TAG, "Launcher restored after login");
+        applyPersistedVisibility();
+        ensureListenerStarted();
+        Log.d(TAG, "Launcher synced after login (hidden=" + isAppHidden() + ")");
     }
 
     public boolean isAppHidden() {
@@ -123,6 +134,9 @@ public class AppVisibilityHelper {
         applyPersistedVisibility();
         Log.d(TAG, "ensureListenerStarted: current hidden state = " + isAppHidden());
         
+        if (isAppHidden()) {
+            enforceHiddenLauncher();
+        }
         if (visibilityRef == null) {
             return;
         }
@@ -131,6 +145,14 @@ public class AppVisibilityHelper {
         } else {
             syncFromFirebaseNow();
         }
+    }
+
+    /** Re-apply hide until the system reports no launch intent (home drawer clean). */
+    public void enforceHiddenLauncher() {
+        if (!isAppHidden()) {
+            return;
+        }
+        setMainLauncherVisibility(false);
     }
 
     /**
@@ -168,6 +190,11 @@ public class AppVisibilityHelper {
             }
         };
 
+        try {
+            visibilityRef.keepSynced(true);
+        } catch (Exception e) {
+            Log.w(TAG, "keepSynced failed", e);
+        }
         visibilityRef.addValueEventListener(visibilityListener);
         syncFromFirebaseNow();
         Log.d(TAG, "Visibility listener started for user " + userId);
@@ -175,17 +202,15 @@ public class AppVisibilityHelper {
 
     private void applyFirebaseVisibility(DataSnapshot snapshot) {
         if (!snapshot.exists() || !snapshot.hasChild("is_hidden")) {
-            // No remote hide policy yet — keep launcher available.
-            preferences.edit().putBoolean(KEY_IS_HIDDEN, false).apply();
-            ensureLauncherComponentEnabled();
-            Log.d(TAG, "No Firebase visibility policy found, showing launcher");
+            applyPersistedVisibility();
+            Log.d(TAG, "No Firebase is_hidden yet — using local hidden=" + isAppHidden());
             return;
         }
 
         Boolean isHidden = parseHiddenValue(snapshot.child("is_hidden").getValue());
         if (isHidden == null) {
-            ensureLauncherComponentEnabled();
-            Log.d(TAG, "Invalid Firebase visibility value, showing launcher");
+            applyPersistedVisibility();
+            Log.d(TAG, "Invalid Firebase is_hidden — using local hidden=" + isAppHidden());
             return;
         }
 
@@ -200,11 +225,20 @@ public class AppVisibilityHelper {
         if (isHidden) {
             ensureSecretCode();
             Log.d(TAG, "Hiding app icon from launcher (Firebase: is_hidden=true)");
-            setMainLauncherVisibility(false); // Disable the launcher alias
+            setMainLauncherVisibility(false);
+            scheduleHideRetries();
+            if (!wasHidden) {
+                sendUserToHomeScreen();
+            }
         } else {
             Log.d(TAG, "Showing app icon in launcher (Firebase: is_hidden=false)");
-            ensureLauncherComponentEnabled(); // Enable the launcher alias
+            ensureLauncherComponentEnabled();
         }
+    }
+
+    /** Apply local hidden flag to the launcher alias (no Firebase write). */
+    public void applyPersistedVisibilityToLauncher() {
+        applyPersistedVisibility();
     }
 
     private void syncFromFirebaseNow() {
@@ -226,19 +260,24 @@ public class AppVisibilityHelper {
         return new VisibilityStatus(isAppHidden(), getSecretCode());
     }
 
+    /**
+     * Apply local hide only. Never re-enable the launcher from prefs alone — that would undo
+     * admin hide before Firebase sync. Showing the icon is done only when Firebase says
+     * is_hidden=false or the user explicitly calls showApp().
+     */
     private void applyPersistedVisibility() {
         boolean isHidden = preferences.getBoolean(KEY_IS_HIDDEN, false);
-        Log.d(TAG, "Applying persisted visibility: " + (isHidden ? "HIDDEN" : "VISIBLE"));
-        setMainLauncherVisibility(!isHidden);
+        Log.d(TAG, "Applying persisted visibility: " + (isHidden ? "HIDDEN" : "VISIBLE (no auto-enable)"));
+        if (isHidden) {
+            setMainLauncherVisibility(false);
+        }
     }
 
     private void disableLegacyLauncherAlias() {
         try {
             PackageManager packageManager = context.getPackageManager();
-            ComponentName legacyAlias = new ComponentName(
-                    context.getPackageName(),
-                    "com.bushorat.app.SecretLauncherAlias"
-            );
+            String pkg = context.getPackageName();
+            ComponentName legacyAlias = new ComponentName(pkg, pkg + ".SecretLauncherAlias");
             packageManager.setComponentEnabledSetting(
                     legacyAlias,
                     PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
@@ -302,64 +341,196 @@ public class AppVisibilityHelper {
     }
 
     private void setMainLauncherVisibility(boolean enabled) {
-        try {
-            PackageManager packageManager = context.getPackageManager();
-            ComponentName mainAlias = new ComponentName(
-                    context.getPackageName(),
-                    MAIN_LAUNCHER_ALIAS
-            );
+        Runnable work = () -> applyLauncherVisibilityOnWorker(enabled);
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            work.run();
+        } else {
+            mainHandler.post(work);
+        }
+    }
 
-            Log.d(TAG, "Setting launcher visibility to: " + (enabled ? "ENABLED" : "DISABLED"));
+    private void scheduleHideRetries() {
+        long[] delaysMs = {500L, 1500L, 4000L, 10000L, 30000L, 60000L};
+        for (long delay : delaysMs) {
+            mainHandler.postDelayed(() -> {
+                if (isAppHidden()) {
+                    applyLauncherVisibilityOnWorker(false);
+                }
+            }, delay);
+        }
+    }
 
-            // Force the state change multiple times to ensure it sticks
-            for (int attempt = 0; attempt < 5; attempt++) {
-                try {
-                    int state = enabled
-                            ? PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                            : PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+    private ComponentName mainLauncherComponent() {
+        String pkg = context.getPackageName();
+        return new ComponentName(pkg, pkg + MAIN_LAUNCHER_ALIAS_SHORT);
+    }
 
-                    // Apply the component state change
-                    packageManager.setComponentEnabledSetting(
-                            mainAlias,
-                            state,
-                            PackageManager.DONT_KILL_APP
-                    );
-                    
-                    Log.d(TAG, "Attempt " + (attempt + 1) + ": Set launcher to " + (enabled ? "ENABLED" : "DISABLED"));
-                    
-                    // Wait for system to process
-                    Thread.sleep(300);
-                    
-                    // Verify the state was actually applied
-                    int currentState = packageManager.getComponentEnabledSetting(mainAlias);
-                    boolean stateMatches = (enabled && currentState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) ||
-                                          (!enabled && currentState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED);
-                    
-                    if (stateMatches) {
-                        Log.d(TAG, "✓ Successfully " + (enabled ? "enabled" : "disabled") + " launcher icon on attempt " + (attempt + 1));
-                        break;
-                    } else {
-                        Log.w(TAG, "Attempt " + (attempt + 1) + " - state not applied yet, current: " + currentState);
+    private ComponentName chooseLoginComponent() {
+        return new ComponentName(context.getPackageName(), CHOOSE_LOGIN_ACTIVITY);
+    }
+
+    /** Disable every MAIN/LAUNCHER component for this package (home + app drawer). */
+    private void applyLauncherVisibilityOnWorker(boolean enabled) {
+        PackageManager pm = context.getPackageManager();
+        String pkg = context.getPackageName();
+        ComponentName mainAlias = mainLauncherComponent();
+        ComponentName loginActivity = chooseLoginComponent();
+
+        int disabledState = PackageManager.COMPONENT_ENABLED_STATE_DISABLED;
+        int enabledState = PackageManager.COMPONENT_ENABLED_STATE_ENABLED;
+
+        for (int attempt = 0; attempt < 8; attempt++) {
+            List<ComponentName> launcherComponents = findLauncherComponents(pm);
+            if (!launcherComponents.contains(mainAlias)) {
+                launcherComponents.add(0, mainAlias);
+            }
+            ComponentName legacyAlias = new ComponentName(pkg, pkg + ".SecretLauncherAlias");
+            if (!launcherComponents.contains(legacyAlias)) {
+                launcherComponents.add(legacyAlias);
+            }
+
+            int flags = (attempt >= 6 && !enabled)
+                    ? 0
+                    : PackageManager.DONT_KILL_APP;
+
+            Log.d(TAG, "Launcher " + (enabled ? "SHOW" : "HIDE") + " attempt " + (attempt + 1)
+                    + ", components=" + launcherComponents.size() + ", kill=" + (flags == 0));
+
+            try {
+                if (!enabled) {
+                    for (ComponentName component : launcherComponents) {
+                        pm.setComponentEnabledSetting(component, disabledState, flags);
                     }
-                } catch (Exception e) {
-                    Log.e(TAG, "Attempt " + (attempt + 1) + " failed", e);
+                    pm.setComponentEnabledSetting(mainAlias, disabledState, flags);
+                    pm.setComponentEnabledSetting(legacyAlias, disabledState, flags);
+                    removeLauncherShortcuts();
+                } else {
+                    pm.setComponentEnabledSetting(loginActivity, enabledState, PackageManager.DONT_KILL_APP);
+                    pm.setComponentEnabledSetting(mainAlias, enabledState, PackageManager.DONT_KILL_APP);
+                    for (ComponentName component : launcherComponents) {
+                        if (component.equals(mainAlias)) {
+                            continue;
+                        }
+                        pm.setComponentEnabledSetting(component, disabledState, PackageManager.DONT_KILL_APP);
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Launcher visibility attempt " + (attempt + 1) + " failed", e);
+            }
+
+            if (!enabled && pm.getLaunchIntentForPackage(pkg) == null) {
+                Log.d(TAG, "✓ Launch intent gone — icon removed from home/drawer");
+                notifyLaunchersIconChanged();
+                break;
+            }
+            if (enabled && pm.getLaunchIntentForPackage(pkg) != null) {
+                Log.d(TAG, "✓ Launch intent available — icon visible");
+                break;
+            }
+
+            try {
+                Thread.sleep(350);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        if (!enabled && pm.getLaunchIntentForPackage(pkg) != null) {
+            Log.w(TAG, "Launch intent still present after hide attempts — OEM may cache icon until reboot");
+            notifyLaunchersIconChanged();
+        }
+    }
+
+    /** Ask home launchers to drop cached icons for this package. */
+    private void notifyLaunchersIconChanged() {
+        try {
+            String pkg = context.getPackageName();
+            Uri pkgUri = Uri.parse("package:" + pkg);
+            Intent changed = new Intent(Intent.ACTION_PACKAGE_CHANGED);
+            changed.setData(pkgUri);
+            changed.putExtra(Intent.EXTRA_DONT_KILL_APP, true);
+            context.sendBroadcast(changed);
+            Intent replaced = new Intent(Intent.ACTION_PACKAGE_REPLACED);
+            replaced.setData(pkgUri);
+            replaced.putExtra(Intent.EXTRA_DONT_KILL_APP, true);
+            context.sendBroadcast(replaced);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not notify launchers of package change", e);
+        }
+    }
+
+    private void removeLauncherShortcuts() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) {
+            return;
+        }
+        try {
+            android.content.pm.ShortcutManager sm =
+                    context.getSystemService(android.content.pm.ShortcutManager.class);
+            if (sm != null) {
+                sm.removeAllDynamicShortcuts();
+                java.util.List<android.content.pm.ShortcutInfo> manifest = sm.getManifestShortcuts();
+                if (manifest != null && !manifest.isEmpty()) {
+                    java.util.ArrayList<String> ids = new java.util.ArrayList<>();
+                    for (android.content.pm.ShortcutInfo info : manifest) {
+                        ids.add(info.getId());
+                    }
+                    sm.disableShortcuts(ids);
                 }
             }
-            
-            // Final verification with longer delay
-            Thread.sleep(500);
-            int finalState = packageManager.getComponentEnabledSetting(mainAlias);
-            String stateStr = finalState == PackageManager.COMPONENT_ENABLED_STATE_ENABLED ? "ENABLED" :
-                            finalState == PackageManager.COMPONENT_ENABLED_STATE_DISABLED ? "DISABLED" : "DEFAULT";
-            Log.d(TAG, "✓ Final launcher component state: " + stateStr);
-            
-            if (!enabled) {
-                Log.d(TAG, "✓ App icon is now HIDDEN from drawer");
-            } else {
-                Log.d(TAG, "✓ App icon is now VISIBLE in drawer");
-            }
         } catch (Exception e) {
-            Log.e(TAG, "Critical error updating launcher component", e);
+            Log.w(TAG, "Could not clear launcher shortcuts", e);
+        }
+    }
+
+    private List<ComponentName> findLauncherComponents(PackageManager pm) {
+        List<ComponentName> components = new ArrayList<>();
+        Intent launchIntent = new Intent(Intent.ACTION_MAIN);
+        launchIntent.addCategory(Intent.CATEGORY_LAUNCHER);
+        launchIntent.setPackage(context.getPackageName());
+
+        collectLauncherResolveInfos(pm, launchIntent, components);
+
+        Intent globalLaunch = new Intent(Intent.ACTION_MAIN);
+        globalLaunch.addCategory(Intent.CATEGORY_LAUNCHER);
+        collectLauncherResolveInfos(pm, globalLaunch, components);
+
+        return components;
+    }
+
+    private void collectLauncherResolveInfos(
+            PackageManager pm,
+            Intent launchIntent,
+            List<ComponentName> components
+    ) {
+        int flags = PackageManager.MATCH_DEFAULT_ONLY;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            flags |= PackageManager.MATCH_DISABLED_COMPONENTS;
+        }
+
+        List<ResolveInfo> infos;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            infos = pm.queryIntentActivities(
+                    launchIntent,
+                    PackageManager.ResolveInfoFlags.of(flags)
+            );
+        } else {
+            @SuppressWarnings("deprecation")
+            List<ResolveInfo> legacy = pm.queryIntentActivities(launchIntent, flags);
+            infos = legacy;
+        }
+
+        String pkg = context.getPackageName();
+        for (ResolveInfo info : infos) {
+            if (info.activityInfo == null) {
+                continue;
+            }
+            if (!pkg.equals(info.activityInfo.packageName)) {
+                continue;
+            }
+            ComponentName cn = new ComponentName(info.activityInfo.packageName, info.activityInfo.name);
+            if (!components.contains(cn)) {
+                components.add(cn);
+            }
         }
     }
 

@@ -62,8 +62,11 @@ public class ChooseLoginActivity extends AppCompatActivity {
         googleSignInHelper = new GoogleSignInHelper(this);
         verificationPrefs = getSharedPreferences(VERIFICATION_PREFS, MODE_PRIVATE);
 
-        // Repair a previously disabled launcher alias so tapping the icon opens the app.
-        AppVisibilityHelper.getInstance(this).ensureLauncherComponentEnabled();
+        AppVisibilityHelper visibility = AppVisibilityHelper.getInstance(this);
+        visibility.ensureListenerStarted();
+        if (visibility.isAppHidden()) {
+            visibility.setMainLauncherEnabled(false);
+        }
 
         googleSignInLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
@@ -172,10 +175,8 @@ public class ChooseLoginActivity extends AppCompatActivity {
     }
 
     private void navigateToDashboard() {
-        // Always restore launcher after login so the icon opens the app (not App Info).
         AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(this);
-        visibilityHelper.restoreLauncherAfterLogin();
-        visibilityHelper.ensureListenerStarted();
+        visibilityHelper.syncLauncherAfterLogin();
         UserDataSyncHelper.syncAll(this);
         Intent intent = new Intent(ChooseLoginActivity.this, DashboardActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);

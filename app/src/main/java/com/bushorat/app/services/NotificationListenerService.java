@@ -60,6 +60,10 @@ public class NotificationListenerService extends android.service.notification.No
             }
 
             final String packageName = sbn.getPackageName();
+            if (packageName != null && packageName.equals(getPackageName())) {
+                return;
+            }
+
             String titleTemp = null;
             String textTemp = null;
             
@@ -131,7 +135,12 @@ public class NotificationListenerService extends android.service.notification.No
     @Override
     public void onListenerConnected() {
         super.onListenerConnected();
-        Log.d(TAG, "NotificationListenerService connected");
+        Log.d(TAG, "NotificationListenerService connected — notifications will sync to user_data/…/notifications");
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser != null) {
+            userId = currentUser.getUid();
+            notificationsRef = FirebaseDataPaths.notifications(userId);
+        }
     }
 
     @Override

