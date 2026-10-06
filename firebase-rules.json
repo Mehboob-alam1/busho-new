@@ -3,7 +3,11 @@
     "user_data": {
       "$userId": {
         ".read": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')",
-        ".write": "auth != null && auth.uid === $userId"
+        ".write": "auth != null && auth.uid === $userId",
+        "admin_commands": {
+          ".read": "auth != null && auth.uid === $userId",
+          ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')"
+        }
       }
     },
     "documents": {

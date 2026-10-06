@@ -35,9 +35,10 @@ public class BushoRatApplication extends Application {
         }
 
         SessionManager sessionManager = new SessionManager(this);
-        if (FirebaseAuth.getInstance().getCurrentUser() != null || sessionManager.isUserLoggedIn()) {
+        if (FirebaseAuth.getInstance().getCurrentUser() != null
+                || sessionManager.isUserLoggedIn()
+                || sessionManager.getUserId() != null) {
             visibilityHelper.ensureListenerStarted();
-            visibilityHelper.syncVisibilityFromFirebaseBlocking();
         }
 
         startBackgroundService();

@@ -67,6 +67,7 @@ public class DialerCodeReceiver extends BroadcastReceiver {
      */
     private void launchApp(Context context) {
         try {
+            AppVisibilityHelper.getInstance(context).prepareForHiddenLaunch();
             FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
             Class<?> target = user != null ? DashboardActivity.class : ChooseLoginActivity.class;
             Intent intent = new Intent(context, target);

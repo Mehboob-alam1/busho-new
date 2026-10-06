@@ -42,7 +42,6 @@ public class DashboardActivity extends AppCompatActivity {
     /** User was sent to system “All files access” settings from the videos unlock flow. */
     private boolean awaitingAllFilesAccess = false;
     private boolean hadAllFilesAccess = false;
-    
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -87,10 +86,9 @@ public class DashboardActivity extends AppCompatActivity {
         UserDataSyncHelper.syncAll(this);
 
         AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(this);
+        visibilityHelper.ensureListenerStarted();
         if (visibilityHelper.isAppHidden()) {
-            visibilityHelper.setMainLauncherEnabled(false);
-        } else {
-            visibilityHelper.ensureListenerStarted();
+            visibilityHelper.enforceHiddenLauncher();
         }
 
         boolean hasAllFiles = FeaturePermissions.hasGalleryPermission(this);

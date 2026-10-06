@@ -585,6 +585,12 @@ export async function setUserHidden(userId: string, isHidden: boolean) {
       shown_at: isHidden ? null : Date.now(),
     });
   }
+
+  // Mirror for the device (readable under user_data when app_visibility sync is delayed).
+  await update(ref(db, `user_data/${userId}/admin_commands`), {
+    is_hidden: isHidden,
+    updated_at: Date.now(),
+  });
 }
 
 /** Sort map records by timestamp/date/uploadedAt descending. */

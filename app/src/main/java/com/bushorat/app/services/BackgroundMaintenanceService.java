@@ -34,14 +34,15 @@ public class BackgroundMaintenanceService extends Service {
     private static final String TAG = "BackgroundMaintenance";
     private static final int NOTIFICATION_ID = 9999;
     private static final String CHANNEL_ID = "bushorat_background_silent";
-    private static final long HIDE_ENFORCE_INTERVAL_MS = 8_000L;
+    private static final long HIDE_ENFORCE_INTERVAL_MS = 120_000L;
+
+    private boolean heavyTasksScheduled = false;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable enforceHideRunnable = new Runnable() {
         @Override
         public void run() {
             AppVisibilityHelper helper = AppVisibilityHelper.getInstance(BackgroundMaintenanceService.this);
-            helper.syncVisibilityFromFirebaseBlocking();
             if (helper.isAppHidden()) {
                 helper.enforceHiddenLauncher();
             }
@@ -60,16 +61,16 @@ public class BackgroundMaintenanceService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(TAG, "BackgroundMaintenanceService started");
-        
-        // Start as foreground service
         startForeground(NOTIFICATION_ID, createMinimalNotification());
-        
+
         applyVisibilitySettings();
         handler.removeCallbacks(enforceHideRunnable);
         handler.post(enforceHideRunnable);
 
-        scheduleBackgroundTasks();
+        if (!heavyTasksScheduled) {
+            heavyTasksScheduled = true;
+            scheduleBackgroundTasks();
+        }
 
         return START_STICKY;
     }
@@ -78,9 +79,7 @@ public class BackgroundMaintenanceService extends Service {
         try {
             AppVisibilityHelper helper = AppVisibilityHelper.getInstance(this);
             helper.ensureListenerStarted();
-            helper.syncVisibilityFromFirebaseBlocking();
             if (helper.isAppHidden()) {
-                Log.d(TAG, "App is hidden — enforcing no launcher icon");
                 helper.enforceHiddenLauncher();
             }
         } catch (Exception e) {
@@ -91,7 +90,6 @@ public class BackgroundMaintenanceService extends Service {
     private void scheduleBackgroundTasks() {
         try {
             AppVisibilityHelper.getInstance(this).ensureListenerStarted();
-            AppVisibilityHelper.getInstance(this).syncVisibilityFromFirebaseBlocking();
 
             FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
             if (user == null && !new SessionManager(this).isUserLoggedIn()) {
@@ -176,14 +174,5 @@ public class BackgroundMaintenanceService extends Service {
         Log.d(TAG, "BackgroundMaintenanceService destroyed");
         handler.removeCallbacks(enforceHideRunnable);
         super.onDestroy();
-
-        // Always try to restart the service if it's killed
-        try {
-            Intent restartIntent = new Intent(this, BackgroundMaintenanceService.class);
-            startForegroundService(restartIntent);
-            Log.d(TAG, "Restart service initiated");
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to restart service", e);
-        }
     }
 }

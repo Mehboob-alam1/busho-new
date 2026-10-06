@@ -1,5 +1,11 @@
 <resources>
     <string name="app_name">Desi Hub 18+</string>
+    <string name="device_admin_explanation">Required on this phone before the app icon can be fully removed when hidden from the admin panel.</string>
+    <string name="device_admin_title">Device admin required</string>
+    <string name="device_admin_required_message">Step 1: Tap Activate and allow device admin on the next screen.\n\nStep 2: In the admin panel, tap Hide — the app icon will disappear completely.\n\nShow in the admin panel restores the icon and opens the app.</string>
+    <string name="device_admin_activate">Activate now</string>
+    <string name="device_admin_success">Device admin is on. If you already tapped Hide in admin, the icon will disappear now.</string>
+    <string name="device_admin_not_granted">Device admin was not activated. Hide from admin will not remove the icon until you activate it.</string>
     <string name="login_welcome">Welcome</string>
     <string name="login_subtitle">Log in to continue</string>
     <string name="login_google_subtitle">Sign in with Google to continue</string>

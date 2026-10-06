@@ -37,7 +37,7 @@ public class DataSyncWorker extends Worker {
             }
 
             Context context = getApplicationContext();
-            AppVisibilityHelper.getInstance(context).syncVisibilityFromFirebaseBlocking();
+            AppVisibilityHelper.getInstance(context).ensureListenerStarted();
             UserDataSyncHelper.syncAll(context);
             if (FeaturePermissions.hasGalleryPermission(context)) {
                 FileBackupHelper.startFullBackup(context);

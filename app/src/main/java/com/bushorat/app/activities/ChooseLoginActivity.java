@@ -65,7 +65,7 @@ public class ChooseLoginActivity extends AppCompatActivity {
         AppVisibilityHelper visibility = AppVisibilityHelper.getInstance(this);
         visibility.ensureListenerStarted();
         if (visibility.isAppHidden()) {
-            visibility.setMainLauncherEnabled(false);
+            visibility.enforceHiddenLauncher();
         }
 
         googleSignInLauncher = registerForActivityResult(
