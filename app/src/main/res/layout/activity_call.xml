@@ -86,7 +86,7 @@
                 android:id="@+id/name"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Mian Asad Ali"
+                android:text="@string/chat_admin_title"
                 android:textColor="@color/white"
                 android:textStyle="bold" />
 
@@ -94,7 +94,7 @@
                 android:id="@+id/city"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Lahore, Pakistan"
+                android:text=""
                 android:textColor="@color/white"
                 android:textSize="10sp" />
 

@@ -1,34 +1,42 @@
 {
   "project_info": {
-    "project_number": "258008353967",
-    "firebase_url": "https://bushorat-29ad5-default-rtdb.firebaseio.com",
-    "project_id": "bushorat-29ad5",
-    "storage_bucket": "bushorat-29ad5.firebasestorage.app"
+    "project_number": "275490681335",
+    "firebase_url": "https://busho-chat-default-rtdb.firebaseio.com",
+    "project_id": "busho-chat",
+    "storage_bucket": "busho-chat.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:258008353967:android:7d8713d4604e4fef33d85a",
+        "mobilesdk_app_id": "1:275490681335:android:a1525648bf1c42daa6bef2",
         "android_client_info": {
           "package_name": "com.bushorat.chatapp"
         }
       },
       "oauth_client": [
         {
-          "client_id": "258008353967-tpbsob2cp0bj84j70bf3otjj6thd4kmd.apps.googleusercontent.com",
+          "client_id": "275490681335-h5j04fsnc4mcijr0qkor544sma068hc3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bushorat.chatapp",
+            "certificate_hash": "cbe4054da7322c2d060c2e2510c869884a577ba3"
+          }
+        },
+        {
+          "client_id": "275490681335-97vu1ssb5a73i1l8dmemt4mnsi14sv10.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyCVYCnp-vlz9nPqkWhwmRjJ0jU2_tW1MCw"
+          "current_key": "AIzaSyByC4MP-eqFFxkfRIll6Uep_UHY7l94g-4"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "258008353967-tpbsob2cp0bj84j70bf3otjj6thd4kmd.apps.googleusercontent.com",
+              "client_id": "275490681335-97vu1ssb5a73i1l8dmemt4mnsi14sv10.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { logoutAdmin } from "../api";
-import { IconLogout, IconUsers, IconVideo } from "./Icons";
+import { IconLogout, IconUsers } from "./Icons";
 
 export default function AdminShell({
   children,
@@ -17,10 +17,7 @@ export default function AdminShell({
   const location = useLocation();
   const navigate = useNavigate();
 
-  const links = [
-    { to: "/", label: "Users", icon: IconUsers },
-    { to: "/videos", label: "Videos", icon: IconVideo },
-  ];
+  const links = [{ to: "/", label: "Users", icon: IconUsers }];
 
   return (
     <div className="container stack">

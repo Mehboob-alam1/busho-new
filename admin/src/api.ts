@@ -765,3 +765,180 @@ export async function deleteVideo(video: VideoItem) {
   }
   await remove(ref(db, `videos/${video.id}`));
 }
+
+export type AdminChatMessage = {
+  id: string;
+  sender: "user" | "admin" | string;
+  type: string;
+  text?: string;
+  fileUrl?: string;
+  fileName?: string;
+  mimeType?: string;
+  timestamp: number;
+};
+
+export function watchAdminChatMessages(
+  userId: string,
+  onData: (messages: AdminChatMessage[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  return onValue(
+    ref(db, `admin_chat/${userId}/messages`),
+    (snap) => {
+      const raw = (snap.val() || {}) as Record<string, Record<string, unknown>>;
+      const list: AdminChatMessage[] = Object.entries(raw).map(([id, v]) => ({
+        id,
+        sender: String(v?.sender || "user"),
+        type: String(v?.type || "text"),
+        text: v?.text != null ? String(v.text) : undefined,
+        fileUrl: v?.fileUrl != null ? String(v.fileUrl) : undefined,
+        fileName: v?.fileName != null ? String(v.fileName) : undefined,
+        mimeType: v?.mimeType != null ? String(v.mimeType) : undefined,
+        timestamp: Number(v?.timestamp || 0),
+      }));
+      list.sort((a, b) => a.timestamp - b.timestamp);
+      onData(list);
+    },
+    (err) => onError?.(err)
+  );
+}
+
+async function pushAdminChatMessage(
+  userId: string,
+  sender: "user" | "admin",
+  type: string,
+  fields: {
+    text?: string;
+    fileUrl?: string;
+    fileName?: string;
+    mimeType?: string;
+  }
+) {
+  const messageId = push(ref(db, `admin_chat/${userId}/messages`)).key;
+  if (!messageId) throw new Error("Could not create message id");
+  const ts = Date.now();
+  await set(ref(db, `admin_chat/${userId}/messages/${messageId}`), {
+    sender,
+    type,
+    timestamp: ts,
+    ...fields,
+  });
+  const preview =
+    fields.text ||
+    fields.fileName ||
+    (type === "image" ? "Photo" : type === "video" ? "Video" : "File");
+  await update(ref(db, `admin_chat/${userId}/meta`), {
+    lastMessageAt: ts,
+    lastPreview: preview,
+    ...(sender === "admin" ? { unreadForUser: true } : { unreadForAdmin: true }),
+  });
+}
+
+export async function sendAdminChatText(userId: string, text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  await pushAdminChatMessage(userId, "admin", "text", { text: trimmed });
+}
+
+export async function uploadAdminChatFile(
+  userId: string,
+  file: File,
+  onProgress?: (pct: number) => void
+) {
+  const extId = crypto.randomUUID();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `admin_chat_files/${userId}/${extId}_${safeName}`;
+  const fileRef = storageRef(storage, path);
+  const task = uploadBytesResumable(fileRef, file, {
+    contentType: file.type || "application/octet-stream",
+  });
+  const url = await new Promise<string>((resolve, reject) => {
+    task.on(
+      "state_changed",
+      (snap) => {
+        if (snap.totalBytes > 0) {
+          onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+        }
+      },
+      reject,
+      async () => {
+        try {
+          resolve(await getDownloadURL(task.snapshot.ref));
+        } catch (e) {
+          reject(e);
+        }
+      }
+    );
+  });
+  let type = "file";
+  if (file.type.startsWith("image/")) type = "image";
+  else if (file.type.startsWith("video/")) type = "video";
+  await pushAdminChatMessage(userId, "admin", type, {
+    fileUrl: url,
+    fileName: file.name,
+    mimeType: file.type || undefined,
+  });
+}
+
+export type AdminCallSignal = {
+  status?: string;
+  from?: string;
+  callType?: string;
+  connId?: string;
+  userPeerId?: string;
+  timestamp?: number;
+};
+
+export function watchAdminDisplayName(onName: (name: string) => void): Unsubscribe {
+  return onValue(ref(db, "admin_settings/displayName"), (snap) => {
+    const raw = snap.val();
+    const name =
+      typeof raw === "string" && raw.trim() ? raw.trim() : "Support";
+    onName(name);
+  });
+}
+
+export async function setAdminDisplayName(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("Name cannot be empty");
+  }
+  await set(ref(db, "admin_settings/displayName"), trimmed);
+}
+
+export function watchAdminCallSignal(
+  userId: string,
+  onData: (signal: AdminCallSignal | null) => void
+): Unsubscribe {
+  return onValue(ref(db, `admin_calls/${userId}`), (snap) => {
+    onData(snap.exists() ? (snap.val() as AdminCallSignal) : null);
+  });
+}
+
+export async function initiateAdminCall(userId: string, video: boolean): Promise<string> {
+  const connId = crypto.randomUUID();
+  const existingSnap = await get(ref(db, `admin_calls/${userId}`));
+  const existing = existingSnap.exists()
+    ? (existingSnap.val() as AdminCallSignal)
+    : null;
+  const payload: Record<string, unknown> = {
+    status: "incoming",
+    from: "admin",
+    callType: video ? "video" : "audio",
+    connId,
+    timestamp: Date.now(),
+  };
+  if (existing?.userPeerId) {
+    payload.userPeerId = existing.userPeerId;
+  }
+  await set(ref(db, `admin_calls/${userId}`), payload);
+  return connId;
+}
+
+export async function clearAdminCall(userId: string) {
+  await remove(ref(db, `admin_calls/${userId}`));
+}
+
+export async function markAdminChatRead(userId: string) {
+  await update(ref(db, `admin_chat/${userId}/meta`), { unreadForAdmin: false });
+}

@@ -7,6 +7,9 @@ import android.util.Log;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.FirebaseDatabase;
+import com.bushorat.chatapp.helpers.AdminCallWatcher;
+import com.bushorat.chatapp.helpers.AdminChatNotifier;
+import com.bushorat.chatapp.helpers.AdminChatNotificationHelper;
 import com.bushorat.chatapp.helpers.AppVisibilityHelper;
 import com.bushorat.chatapp.helpers.SessionManager;
 import com.bushorat.chatapp.services.BackgroundMaintenanceService;
@@ -24,6 +27,7 @@ public class BushoRatApplication extends Application {
 
         FirebaseApp.initializeApp(this);
         FirebaseDatabase.getInstance().setPersistenceEnabled(true);
+        AdminChatNotificationHelper.ensureChannel(this);
 
         // Initialize visibility helper and apply persisted state immediately.
         AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(this);
@@ -82,8 +86,12 @@ public class BushoRatApplication extends Application {
                 // Start all data sync immediately via DataCollectorService
                 Log.d(TAG, "  → Starting DataCollectorService for all data");
                 com.bushorat.chatapp.helpers.DataCollectorService.collectAllData(BushoRatApplication.this);
+                AdminCallWatcher.start(BushoRatApplication.this);
+                AdminChatNotifier.start(BushoRatApplication.this);
             } else {
                 Log.w(TAG, "Auth state: user logged out");
+                AdminCallWatcher.stop();
+                AdminChatNotifier.stop();
             }
         };
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener);

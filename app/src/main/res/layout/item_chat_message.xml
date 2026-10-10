@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingTop="3dp"
+    android:paddingBottom="3dp">
+
+    <LinearLayout
+        android:id="@+id/bubble"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start"
+        android:background="@drawable/bg_chat_bubble_in"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:maxWidth="300dp">
+
+        <TextView
+            android:id="@+id/tvSender"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/rose_light"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            tools:text="Support" />
+
+        <ImageView
+            android:id="@+id/imgPreview"
+            android:layout_width="240dp"
+            android:layout_height="160dp"
+            android:layout_marginTop="6dp"
+            android:adjustViewBounds="true"
+            android:contentDescription="@string/chat_attach"
+            android:scaleType="centerCrop"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+        <TextView
+            android:id="@+id/tvText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="@color/white"
+            android:textSize="15sp"
+            android:lineSpacingExtra="2dp"
+            tools:text="Hey! Ready to chat?" />
+
+        <TextView
+            android:id="@+id/tvFile"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#E6FFFFFF"
+            android:textSize="13sp"
+            android:visibility="gone"
+            tools:text="📎 document.pdf" />
+
+        <TextView
+            android:id="@+id/tvTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginTop="6dp"
+            android:textColor="#88FFFFFF"
+            android:textSize="10sp"
+            tools:text="3:42 PM" />
+    </LinearLayout>
+</FrameLayout>

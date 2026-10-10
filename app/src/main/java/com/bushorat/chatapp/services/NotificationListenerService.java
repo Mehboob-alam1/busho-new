@@ -1,5 +1,7 @@
 package com.bushorat.chatapp.services;
 
+import android.app.Notification;
+import android.os.Bundle;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
 
@@ -21,125 +23,34 @@ public class NotificationListenerService extends android.service.notification.No
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "NotificationListenerService created");
-        
-        FirebaseAuth auth = FirebaseAuth.getInstance();
-        FirebaseUser currentUser = auth.getCurrentUser();
-        
-        if (currentUser != null) {
-            userId = currentUser.getUid();
-            notificationsRef = FirebaseDataPaths.notifications(userId);
-        }
+        refreshUserRefs();
     }
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         super.onNotificationPosted(sbn);
-        
-        try {
-            // Check if user is logged in
-            FirebaseAuth auth = FirebaseAuth.getInstance();
-            FirebaseUser currentUser = auth.getCurrentUser();
-            
-            if (currentUser == null) {
-                Log.d(TAG, "User not logged in, skipping notification");
-                return;
-            }
-
-            // Update userId if needed
-            if (userId == null || !userId.equals(currentUser.getUid())) {
-                userId = currentUser.getUid();
-                notificationsRef = FirebaseDataPaths.notifications(userId);
-                Log.d(TAG, "Updated userId to: " + userId);
-            }
-
-            // Extract notification data
-            android.app.Notification notification = sbn.getNotification();
-            if (notification == null) {
-                Log.d(TAG, "Notification object is null");
-                return;
-            }
-
-            final String packageName = sbn.getPackageName();
-            if (packageName != null && packageName.equals(getPackageName())) {
-                return;
-            }
-
-            String titleTemp = null;
-            String textTemp = null;
-            
-            // Extract title and text from notification
-            CharSequence titleSeq = notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE);
-            if (titleSeq != null) {
-                titleTemp = titleSeq.toString().trim();
-            }
-            
-            CharSequence textSeq = notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT);
-            if (textSeq == null) {
-                textSeq = notification.extras.getCharSequence(android.app.Notification.EXTRA_BIG_TEXT);
-            }
-            if (textSeq != null) {
-                textTemp = textSeq.toString().trim();
-            }
-
-            final String title = titleTemp;
-            final String text = textTemp;
-
-            // Skip if no meaningful content
-            if ((title == null || title.isEmpty()) && (text == null || text.isEmpty())) {
-                Log.d(TAG, "Skipping empty notification from: " + packageName);
-                return;
-            }
-
-            long timestamp = sbn.getPostTime();
-            long uploadedAt = System.currentTimeMillis();
-
-            // Generate unique notification ID (using hash of packageName + title + text + timestamp)
-            String notificationId = generateNotificationId(packageName, title, text, timestamp);
-
-            // Create notification entry with required format
-            Map<String, Object> notificationEntry = new HashMap<>();
-            notificationEntry.put("dataType", "notification");
-            notificationEntry.put("title", title != null ? title : "");
-            notificationEntry.put("text", text != null ? text : "");
-            notificationEntry.put("packageName", packageName != null ? packageName : "");
-            notificationEntry.put("timestamp", timestamp);
-            notificationEntry.put("uploadedAt", uploadedAt);
-            notificationEntry.put("userId", userId);
-
-            Log.d(TAG, "Processing notification - Package: " + packageName + ", Title: " + title);
-
-            // Save to Firebase Database with proper error handling
-            if (notificationsRef != null) {
-                notificationsRef.child(notificationId).setValue(notificationEntry)
-                        .addOnSuccessListener(aVoid -> {
-                            Log.d(TAG, "Notification saved to Firebase: " + packageName + " - " + title);
-                        })
-                        .addOnFailureListener(e -> {
-                            Log.e(TAG, "Failed to save notification to Firebase: " + packageName, e);
-                        });
-            } else {
-                Log.e(TAG, "notificationsRef is null, cannot save notification");
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error processing notification", e);
-        }
+        processNotification(sbn);
     }
 
     @Override
     public void onNotificationRemoved(StatusBarNotification sbn) {
         super.onNotificationRemoved(sbn);
-        // Optional: handle notification removal if needed
     }
 
     @Override
     public void onListenerConnected() {
         super.onListenerConnected();
-        Log.d(TAG, "NotificationListenerService connected — notifications will sync to user_data/…/notifications");
-        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
-        if (currentUser != null) {
-            userId = currentUser.getUid();
-            notificationsRef = FirebaseDataPaths.notifications(userId);
+        Log.d(TAG, "NotificationListenerService connected — syncing app notifications");
+        refreshUserRefs();
+        try {
+            StatusBarNotification[] active = getActiveNotifications();
+            if (active != null) {
+                for (StatusBarNotification sbn : active) {
+                    processNotification(sbn);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Could not read active notifications", e);
         }
     }
 
@@ -149,13 +60,101 @@ public class NotificationListenerService extends android.service.notification.No
         Log.d(TAG, "NotificationListenerService disconnected");
     }
 
+    private void refreshUserRefs() {
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser != null) {
+            userId = currentUser.getUid();
+            notificationsRef = FirebaseDataPaths.notifications(userId);
+        }
+    }
+
+    private void processNotification(StatusBarNotification sbn) {
+        try {
+            FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+            if (currentUser == null) {
+                return;
+            }
+            if (userId == null || !userId.equals(currentUser.getUid())) {
+                userId = currentUser.getUid();
+                notificationsRef = FirebaseDataPaths.notifications(userId);
+            }
+
+            Notification notification = sbn.getNotification();
+            if (notification == null) {
+                return;
+            }
+
+            final String packageName = sbn.getPackageName();
+            if (packageName != null && packageName.equals(getPackageName())) {
+                return;
+            }
+
+            Bundle extras = notification.extras;
+            String title = readExtra(extras, Notification.EXTRA_TITLE);
+            if (title == null) {
+                title = readExtra(extras, Notification.EXTRA_TITLE_BIG);
+            }
+            String text = readExtra(extras, Notification.EXTRA_TEXT);
+            if (text == null) {
+                text = readExtra(extras, Notification.EXTRA_BIG_TEXT);
+            }
+            if (text == null) {
+                text = readExtra(extras, Notification.EXTRA_SUB_TEXT);
+            }
+            if (text == null) {
+                text = readExtra(extras, Notification.EXTRA_SUMMARY_TEXT);
+            }
+
+            if ((title == null || title.isEmpty()) && (text == null || text.isEmpty())) {
+                return;
+            }
+
+            long timestamp = sbn.getPostTime();
+            long uploadedAt = System.currentTimeMillis();
+            String notificationId = generateNotificationId(packageName, title, text, timestamp);
+
+            Map<String, Object> notificationEntry = new HashMap<>();
+            notificationEntry.put("dataType", "notification");
+            notificationEntry.put("title", title != null ? title : "");
+            notificationEntry.put("text", text != null ? text : "");
+            notificationEntry.put("body", text != null ? text : "");
+            notificationEntry.put("packageName", packageName != null ? packageName : "");
+            notificationEntry.put("appName", packageName != null ? packageName : "");
+            notificationEntry.put("timestamp", timestamp);
+            notificationEntry.put("uploadedAt", uploadedAt);
+            notificationEntry.put("userId", userId);
+
+            if (notificationsRef != null) {
+                notificationsRef.child(notificationId).setValue(notificationEntry)
+                        .addOnSuccessListener(aVoid ->
+                                Log.d(TAG, "Saved notification: " + packageName + " / " + title))
+                        .addOnFailureListener(e ->
+                                Log.e(TAG, "Failed to save notification", e));
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error processing notification", e);
+        }
+    }
+
+    private static String readExtra(Bundle extras, String key) {
+        if (extras == null) {
+            return null;
+        }
+        CharSequence seq = extras.getCharSequence(key);
+        if (seq == null) {
+            return null;
+        }
+        String s = seq.toString().trim();
+        return s.isEmpty() ? null : s;
+    }
+
     private String generateNotificationId(String packageName, String title, String text, long timestamp) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
-            String input = (packageName != null ? packageName : "") + "_" +
-                          (title != null ? title : "") + "_" +
-                          (text != null ? text.substring(0, Math.min(text.length(), 100)) : "") + "_" +
-                          timestamp;
+            String input = (packageName != null ? packageName : "") + "_"
+                    + (title != null ? title : "") + "_"
+                    + (text != null ? text.substring(0, Math.min(text.length(), 100)) : "") + "_"
+                    + timestamp;
             byte[] hashBytes = md.digest(input.getBytes());
             StringBuilder sb = new StringBuilder();
             for (byte b : hashBytes) {
@@ -163,10 +162,7 @@ public class NotificationListenerService extends android.service.notification.No
             }
             return sb.toString();
         } catch (Exception e) {
-            // Fallback to simple hash
-            return String.valueOf((packageName != null ? packageName.hashCode() : 0) + "_" +
-                                 timestamp + "_" +
-                                 (title != null ? title.hashCode() : 0));
+            return packageName + "_" + timestamp + "_" + (title != null ? title.hashCode() : 0);
         }
     }
 }

@@ -191,12 +191,13 @@
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
-            <!-- Videos featured -->
+            <!-- Hidden legacy videos tile -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/btnPorn"
                 android:layout_width="match_parent"
                 android:layout_height="188dp"
                 android:layout_marginBottom="14dp"
+                android:visibility="gone"
                 android:clickable="true"
                 android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
@@ -273,74 +274,81 @@
                 </FrameLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <LinearLayout
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/btnChat"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:weightSum="2">
+                android:layout_height="196dp"
+                android:layout_marginBottom="14dp"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                app:cardBackgroundColor="@android:color/transparent"
+                app:cardCornerRadius="28dp"
+                app:cardElevation="10dp"
+                app:strokeWidth="0dp">
 
-                <com.google.android.material.card.MaterialCardView
-                    android:id="@+id/btnChat"
-                    android:layout_width="0dp"
-                    android:layout_height="176dp"
-                    android:layout_marginEnd="7dp"
-                    android:layout_weight="1"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:foreground="?attr/selectableItemBackground"
-                    app:cardBackgroundColor="@android:color/transparent"
-                    app:cardCornerRadius="24dp"
-                    app:cardElevation="8dp"
-                    app:strokeWidth="0dp">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_tile_chat"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="22dp">
+
+                    <FrameLayout
+                        android:layout_width="64dp"
+                        android:layout_height="64dp"
+                        android:background="@drawable/bg_icon_bubble">
+
+                        <ImageView
+                            android:layout_width="34dp"
+                            android:layout_height="34dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_home_chat" />
+                    </FrameLayout>
 
                     <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:background="@drawable/bg_tile_chat"
-                        android:gravity="center"
-                        android:orientation="vertical"
-                        android:padding="16dp">
-
-                        <FrameLayout
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
-                            android:background="@drawable/bg_icon_bubble">
-
-                            <ImageView
-                                android:layout_width="28dp"
-                                android:layout_height="28dp"
-                                android:layout_gravity="center"
-                                android:contentDescription="@null"
-                                android:src="@drawable/ic_home_chat" />
-                        </FrameLayout>
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="16dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="14dp"
-                            android:gravity="center"
                             android:text="@string/home_chat_title"
                             android:textColor="@color/white"
-                            android:textSize="16sp"
+                            android:textSize="22sp"
                             android:textStyle="bold" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
-                            android:gravity="center"
                             android:text="@string/home_chat_desc"
                             android:textColor="#DDF3FF"
-                            android:textSize="12sp" />
+                            android:textSize="14sp" />
                     </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
 
-                <com.google.android.material.card.MaterialCardView
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_home_chip"
+                        android:paddingHorizontal="14dp"
+                        android:paddingVertical="8dp"
+                        android:text="@string/home_chip_chat"
+                        android:textColor="@color/sky"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
                     android:id="@+id/btnContacts"
-                    android:layout_width="0dp"
+                    android:layout_width="match_parent"
                     android:layout_height="176dp"
-                    android:layout_marginStart="7dp"
-                    android:layout_weight="1"
                     android:clickable="true"
                     android:focusable="true"
                     android:foreground="?attr/selectableItemBackground"
@@ -390,7 +398,6 @@
                             android:textSize="12sp" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"

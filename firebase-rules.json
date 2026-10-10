@@ -44,6 +44,35 @@
       "$uid": {
         ".validate": "newData.val() === true"
       }
+    },
+    "admin_chat": {
+      "$userId": {
+        ".read": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')",
+        "messages": {
+          ".write": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')"
+        },
+        "meta": {
+          ".write": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')"
+        }
+      }
+    },
+    "admin_calls": {
+      "$userId": {
+        ".read": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')",
+        ".write": "auth != null && (auth.uid === $userId || root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')"
+      }
+    },
+    "admin_settings": {
+      ".read": "auth != null",
+      "displayName": {
+        ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email === 'admin@bushorat.app')"
+      }
+    },
+    "user_call": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
     }
   }
 }

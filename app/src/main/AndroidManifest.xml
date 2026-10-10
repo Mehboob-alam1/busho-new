@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.bushorat.chatapp">
 
     <uses-feature
         android:name="android.hardware.telephony"
@@ -93,7 +94,7 @@
             android:name=".activities.CallActivity"
             android:exported="false"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
             android:windowSoftInputMode="adjustResize" />
@@ -146,26 +147,25 @@
         <activity
             android:name=".activities.RegisterFacebookActivity"
             android:exported="false" />
-        <!-- No LAUNCHER filter — only MainLauncherAlias may appear on home; login is not exported. -->
         <activity
             android:name=".activities.ChooseLoginActivity"
             android:exported="false"
             android:enabled="true" />
 
         <!-- Only launcher entry — disabled when admin hides the app. -->
-        <activity-alias
-            android:name=".MainLauncherAlias"
-            android:targetActivity=".activities.ChooseLoginActivity"
+        <activity
+            android:name="com.bushorat.chatapp.MainLauncherActivity"
             android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
-            android:roundIcon="@mipmap/ic_launcher_round">
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:theme="@style/Theme.BushoRat.Launcher">
             <intent-filter android:priority="999">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity-alias>
+        </activity>
 
         <activity
             android:name=".activities.LoginActivity"

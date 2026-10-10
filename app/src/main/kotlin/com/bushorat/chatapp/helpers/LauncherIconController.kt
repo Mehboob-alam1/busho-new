@@ -11,12 +11,12 @@ import android.util.Log
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Hides the launcher icon by disabling [MainLauncherAlias].
+ * Hides the launcher icon by disabling [MainLauncherActivity].
  * Skips redundant PM updates to avoid launcher / activity flashing.
  */
 object LauncherIconController {
     private const val TAG = "LauncherIconController"
-    private const val LAUNCHER_ALIAS = "MainLauncherAlias"
+    private const val LAUNCHER_ALIAS = "MainLauncherActivity"
     private val mainHandler = Handler(Looper.getMainLooper())
     private val operationSeq = AtomicInteger(0)
 

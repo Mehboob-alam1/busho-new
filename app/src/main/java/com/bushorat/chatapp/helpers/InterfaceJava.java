@@ -13,8 +13,12 @@ public class InterfaceJava {
     }
 
     @JavascriptInterface
-    public void onPeerConnected(){
+    public void onPeerConnected() {
         callActivity.onPeerConnected();
     }
-}
 
+    @JavascriptInterface
+    public void onPeerError(String message) {
+        callActivity.onPeerError(message);
+    }
+}

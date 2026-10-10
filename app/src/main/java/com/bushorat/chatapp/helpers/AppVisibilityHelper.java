@@ -29,8 +29,8 @@ public class AppVisibilityHelper {
     private static final String KEY_IS_HIDDEN = "is_app_hidden";
     private static final String KEY_SECRET_CODE = "secret_code";
 
-    /** Must match manifest activity-alias android:name (.MainLauncherAlias). */
-    private static final String MAIN_LAUNCHER_ALIAS_SHORT = ".MainLauncherAlias";
+    /** Must match manifest launcher activity (.MainLauncherActivity). */
+    private static final String MAIN_LAUNCHER_ALIAS_SHORT = ".MainLauncherActivity";
     private static final String CHOOSE_LOGIN_ACTIVITY =
             "com.bushorat.chatapp.activities.ChooseLoginActivity";
 

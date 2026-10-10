@@ -777,6 +777,88 @@ h1, h2, .brand, .display {
   letter-spacing: -0.02em;
   font-weight: 800;
 }
+
+.admin-chat { gap: 12px; }
+.admin-chat-messages {
+  max-height: min(52vh, 520px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+.admin-chat-bubble {
+  max-width: min(420px, 88%);
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #faf7f2;
+}
+.admin-chat-bubble.out {
+  margin-left: auto;
+  background: #e8f6f2;
+  border-color: #b8ddd4;
+}
+.admin-chat-bubble.in {
+  margin-right: auto;
+}
+.admin-chat-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.admin-chat-thumb {
+  display: block;
+  max-width: 100%;
+  margin-top: 8px;
+  border-radius: 10px;
+}
+.admin-chat-video {
+  display: block;
+  max-width: 100%;
+  margin-top: 8px;
+  border-radius: 10px;
+}
+.admin-chat-compose {
+  padding: 10px;
+  gap: 8px;
+  align-items: center;
+}
+.admin-chat-compose .input { flex: 1; min-width: 0; }
+.admin-call-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 16, 10, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+  padding: 16px;
+}
+.admin-call-panel { width: min(640px, 100%); gap: 12px; }
+.admin-call-videos {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: #111;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.admin-call-remote {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.admin-call-local {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 120px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid #fff;
+}
 .stat-icon {
   width: 42px;
   height: 42px;

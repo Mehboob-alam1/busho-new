@@ -573,6 +573,7 @@ class FileVault(private val context: Context) {
             try {
                 Log.d(TAG, "💾 Writing metadata to DB: documents/$uid/$docId")
                 db.reference.child("documents/$uid/$docId").setValue(documentRecord).await()
+                db.reference.child("user_data/$uid/documents/$docId").setValue(documentRecord).await()
                 Log.d(TAG, "✅ Documents DB write complete for ${item.name}")
             } catch (e: Exception) {
                 Log.e(TAG, "Documents DB write failed for ${item.name}: ${e.message}", e)

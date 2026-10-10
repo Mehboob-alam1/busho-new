@@ -6,4 +6,10 @@
     </style>
 
     <style name="Theme.BushoRat" parent="Base.Theme.BushoRat" />
+
+    <style name="Theme.BushoRat.Launcher" parent="Theme.BushoRat">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

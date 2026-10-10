@@ -6,49 +6,51 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.FrameLayout;
 import android.widget.Toast;
 
-import com.bumptech.glide.Glide;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
-import com.google.firebase.database.DatabaseReference;
-import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.bushorat.chatapp.R;
 import com.bushorat.chatapp.databinding.ActivityCallBinding;
+import com.bushorat.chatapp.helpers.AdminChatDisplayHelper;
+import com.bushorat.chatapp.helpers.AdminChatHelper;
 import com.bushorat.chatapp.helpers.InterfaceJava;
-import com.bushorat.chatapp.models.UserModel;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 public class CallActivity extends AppCompatActivity {
 
     ActivityCallBinding binding;
     String uniqueId = "";
-    FirebaseAuth auth;
     String username = "";
-    String friendsUsername = "";
-
     boolean isPeerConnected = false;
-
-    DatabaseReference firebaseRef;
-
     boolean isAudio = true;
     boolean isVideo = true;
-    String createdBy;
-
     boolean pageExit = false;
 
-    boolean isFullScreen = false;
+    boolean adminCall = false;
+    boolean userInitiatedAdminCall = false;
+    String presetConnId;
+    boolean videoEnabled = true;
+
+    private ValueEventListener adminCallListener;
+    private ValueEventListener adminNameListener;
+    private String adminDisplayName = "Support";
+
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,64 +58,53 @@ public class CallActivity extends AppCompatActivity {
         binding = ActivityCallBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        auth = FirebaseAuth.getInstance();
-        firebaseRef = FirebaseDatabase.getInstance().getReference().child("user_call");
-
-        username = getIntent().getStringExtra("username");
-        String incoming = getIntent().getStringExtra("incoming");
-        createdBy = getIntent().getStringExtra("createdBy");
-
-        friendsUsername = incoming;
+        readIntentExtras(getIntent());
+        binding.name.setText(adminDisplayName);
+        binding.city.setText("");
 
         setupWebView();
+        bindControls();
+        loadAdminDisplayName();
+    }
 
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        readIntentExtras(intent);
+        if (adminCall && presetConnId != null && isPeerConnected) {
+            connectToAdminPeer();
+        }
+    }
+
+    private void readIntentExtras(android.content.Intent intent) {
+        username = intent.getStringExtra("username");
+        adminCall = intent.getBooleanExtra("adminCall", false);
+        userInitiatedAdminCall = intent.getBooleanExtra("userInitiatedAdminCall", false);
+        presetConnId = intent.getStringExtra("connId");
+        videoEnabled = intent.getBooleanExtra("videoEnabled", true);
+        if (username == null || username.isEmpty()) {
+            FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+            username = user != null ? user.getUid() : "";
+        }
+        isVideo = videoEnabled;
+    }
+
+    private void bindControls() {
         binding.micBtn.setOnClickListener(view -> {
             isAudio = !isAudio;
-            callJavaScriptFunction("javascript:toggleAudio(\""+isAudio+"\")");
-            if(isAudio){
-                binding.micBtn.setImageResource(R.drawable.btn_unmute_normal);
-            } else {
-                binding.micBtn.setImageResource(R.drawable.btn_mute_normal);
-            }
+            callJavaScriptFunction("javascript:toggleAudio(\"" + isAudio + "\")");
+            binding.micBtn.setImageResource(isAudio ? R.drawable.btn_unmute_normal : R.drawable.btn_mute_normal);
         });
 
         binding.videoBtn.setOnClickListener(view -> {
             isVideo = !isVideo;
-            callJavaScriptFunction("javascript:toggleVideo(\""+isVideo+"\")");
-            if(isVideo){
-                binding.videoBtn.setImageResource(R.drawable.btn_video_normal);
-            } else {
-                binding.videoBtn.setImageResource(R.drawable.btn_video_muted);
-            }
+            callJavaScriptFunction("javascript:toggleVideo(\"" + isVideo + "\")");
+            binding.videoBtn.setImageResource(isVideo ? R.drawable.btn_video_normal : R.drawable.btn_video_muted);
         });
 
         binding.endCall.setOnClickListener(view -> finish());
-
-        binding.videoSizeBtn.setOnClickListener(v -> {
-            callJavaScriptFunction("javascript:swapVideos()");
-        });
-    }
-
-    private void toggleVideoSize() {
-        if (isFullScreen) {
-            // Switch to small floating size
-            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                    500, 800 // Width x Height for small mode
-            );
-            params.topMargin = 50;
-            params.leftMargin = 50;
-            binding.webView.setLayoutParams(params);
-            binding.videoSizeBtn.setImageResource(R.drawable.ic_fullscreen);
-        } else {
-            // Switch to fullscreen
-            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-            );
-            binding.webView.setLayoutParams(params);
-            binding.videoSizeBtn.setImageResource(R.drawable.ic_fullscreen_exit);
-        }
-        isFullScreen = !isFullScreen;
+        binding.videoSizeBtn.setOnClickListener(v -> callJavaScriptFunction("javascript:swapVideos()"));
     }
 
     void setupWebView() {
@@ -128,14 +119,8 @@ public class CallActivity extends AppCompatActivity {
 
         binding.webView.getSettings().setJavaScriptEnabled(true);
         binding.webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+        binding.webView.getSettings().setDomStorageEnabled(true);
         binding.webView.addJavascriptInterface(new InterfaceJava(this), "Android");
-
-        loadVideoCall();
-    }
-
-    public void loadVideoCall() {
-        String filePath = "file:android_asset/call.html";
-        binding.webView.loadUrl(filePath);
 
         binding.webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -144,131 +129,122 @@ public class CallActivity extends AppCompatActivity {
                 initializePeer();
             }
         });
+        binding.webView.loadUrl("file:///android_asset/call.html");
     }
 
     void initializePeer() {
-        uniqueId = getUniqueId();
-
+        uniqueId = UUID.randomUUID().toString();
         callJavaScriptFunction("javascript:init(\"" + uniqueId + "\")");
+    }
 
-        if(createdBy.equalsIgnoreCase(username)) {
-            if(pageExit)
+    public void onPeerConnected() {
+        isPeerConnected = true;
+        mainHandler.post(() -> {
+            if (adminCall && presetConnId != null && !presetConnId.isEmpty()) {
+                connectToAdminPeer();
                 return;
-            firebaseRef.child(username).child("connId").setValue(uniqueId);
-            firebaseRef.child(username).child("isAvailable").setValue(true);
-
+            }
+            if (userInitiatedAdminCall) {
+                startUserInitiatedAdminCall();
+                return;
+            }
             binding.loadingGroup.setVisibility(View.GONE);
             binding.controls.setVisibility(View.VISIBLE);
+        });
+    }
 
-            FirebaseDatabase.getInstance().getReference()
-                    .child("profiles")
-                    .child(friendsUsername)
-                    .addListenerForSingleValueEvent(new ValueEventListener() {
-                        @Override
-                        public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
-                            UserModel user = snapshot.getValue(UserModel.class);
+    public void onPeerError(String message) {
+        mainHandler.post(() ->
+                Toast.makeText(this, message != null ? message : "Call error", Toast.LENGTH_SHORT).show()
+        );
+    }
 
-                            if (user != null) {
-                                binding.name.setText(user.getName() != null ? user.getName() : "Stranger");
-                                binding.city.setText(user.getWhatsappNumber() != null ? user.getWhatsappNumber() : "");
-                            }
-                        }
-
-                        @Override
-                        public void onCancelled(@NonNull @NotNull DatabaseError error) {
-
-                        }
-                    });
-
-        } else {
-            new Handler().postDelayed(() -> {
-                friendsUsername = createdBy;
-                FirebaseDatabase.getInstance().getReference()
-                        .child("profiles")
-                        .child(friendsUsername)
-                        .addListenerForSingleValueEvent(new ValueEventListener() {
-                            @Override
-                            public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
-                                UserModel user = snapshot.getValue(UserModel.class);
-
-                                if (user != null) {
-                                    binding.name.setText(user.getName() != null ? user.getName() : "Stranger");
-                                    binding.city.setText(user.getWhatsappNumber() != null ? user.getWhatsappNumber() : "");
-                                }
-                            }
-
-                            @Override
-                            public void onCancelled(@NonNull @NotNull DatabaseError error) {
-
-                            }
-                        });
-                FirebaseDatabase.getInstance().getReference()
-                        .child("user_call")
-                        .child(friendsUsername)
-                        .child("connId")
-                        .addListenerForSingleValueEvent(new ValueEventListener() {
-                            @Override
-                            public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
-                                if(snapshot.getValue() != null) {
-                                    sendCallRequest();
-                                }
-                            }
-
-                            @Override
-                            public void onCancelled(@NonNull @NotNull DatabaseError error) {
-
-                            }
-                        });
-            }, 3000);
+    private void connectToAdminPeer() {
+        binding.name.setText(adminDisplayName);
+        binding.city.setText(getString(R.string.chat_toolbar_subtitle));
+        if (!videoEnabled) {
+            isVideo = false;
+            callJavaScriptFunction("javascript:toggleVideo(\"false\")");
+            binding.videoBtn.setImageResource(R.drawable.btn_video_muted);
         }
-
+        binding.loadingGroup.setVisibility(View.GONE);
+        binding.controls.setVisibility(View.VISIBLE);
+        callJavaScriptFunction("javascript:startCall(\"" + presetConnId + "\", \"" + videoEnabled + "\")");
     }
 
-    public void onPeerConnected(){
-        isPeerConnected = true;
+    private void startUserInitiatedAdminCall() {
+        binding.name.setText(adminDisplayName);
+        binding.city.setText(R.string.chat_call_waiting_admin);
+        AdminChatHelper.requestCallFromUser(username, videoEnabled, uniqueId);
+        listenForAdminAnswer();
     }
 
-    void sendCallRequest(){
-        if(!isPeerConnected) {
-            Toast.makeText(this, "You are not connected. Please check your internet.", Toast.LENGTH_SHORT).show();
-            return;
+    private void listenForAdminAnswer() {
+        if (adminCallListener != null) {
+            AdminChatHelper.callsRef(username).removeEventListener(adminCallListener);
         }
-
-        listenConnId();
-    }
-
-    void listenConnId() {
-        firebaseRef.child(friendsUsername).child("connId").addValueEventListener(new ValueEventListener() {
+        adminCallListener = new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
-                if(snapshot.getValue() == null)
+                if (!snapshot.exists()) {
                     return;
-                binding.loadingGroup.setVisibility(View.GONE);
-                binding.controls.setVisibility(View.VISIBLE);
-                String connId = snapshot.getValue(String.class);
-                callJavaScriptFunction("javascript:startCall(\""+connId+"\")");
+                }
+                String connId = snapshot.child("connId").getValue(String.class);
+                String from = snapshot.child("from").getValue(String.class);
+                String status = snapshot.child("status").getValue(String.class);
+                if (connId == null || connId.isEmpty()) {
+                    return;
+                }
+                if (!AdminChatHelper.SENDER_ADMIN.equals(from)) {
+                    return;
+                }
+                if ("incoming".equals(status) || "active".equals(status)) {
+                    presetConnId = connId;
+                    adminCall = true;
+                    String callType = snapshot.child("callType").getValue(String.class);
+                    videoEnabled = !"audio".equals(callType);
+                    if (isPeerConnected) {
+                        connectToAdminPeer();
+                    }
+                }
             }
 
             @Override
             public void onCancelled(@NonNull @NotNull DatabaseError error) {
-
             }
+        };
+        AdminChatHelper.callsRef(username).addValueEventListener(adminCallListener);
+    }
+
+    private void loadAdminDisplayName() {
+        adminNameListener = AdminChatDisplayHelper.watchAdminDisplayName(name -> {
+            adminDisplayName = name;
+            mainHandler.post(() -> binding.name.setText(name));
         });
     }
 
-    void callJavaScriptFunction(String function){
+    void callJavaScriptFunction(String function) {
         binding.webView.post(() -> binding.webView.evaluateJavascript(function, null));
-    }
-
-    String getUniqueId(){
-        return UUID.randomUUID().toString();
     }
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
         pageExit = true;
-        firebaseRef.child(createdBy).setValue(null);
-        finish();
+        if (adminNameListener != null) {
+            AdminChatDisplayHelper.removeListener(adminNameListener);
+        }
+        if (username != null && adminCallListener != null) {
+            AdminChatHelper.callsRef(username).removeEventListener(adminCallListener);
+        }
+        if (username != null && !username.isEmpty()) {
+            if (userInitiatedAdminCall && !adminCall) {
+                AdminChatHelper.callsRef(username).removeValue();
+            } else {
+                Map<String, Object> clear = new HashMap<>();
+                clear.put("status", "ended");
+                AdminChatHelper.callsRef(username).updateChildren(clear);
+            }
+        }
+        super.onDestroy();
     }
 }
