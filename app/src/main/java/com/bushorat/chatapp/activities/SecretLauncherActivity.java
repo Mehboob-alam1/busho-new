@@ -5,7 +5,6 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -65,21 +64,18 @@ public class SecretLauncherActivity extends AppCompatActivity {
         String inputCode = binding.etSecretCode.getText().toString().trim();
         
         if (inputCode.length() != 6) {
-            Toast.makeText(this, "Please enter a 6-digit code", Toast.LENGTH_SHORT).show();
             return;
         }
 
         if (visibilityHelper.verifySecretCode(inputCode)) {
             // Code verified - show app and navigate to dashboard
             visibilityHelper.showApp();
-            Toast.makeText(this, "App restored! Opening dashboard...", Toast.LENGTH_SHORT).show();
             
             Intent intent = new Intent(this, DashboardActivity.class);
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
             finish();
         } else {
-            Toast.makeText(this, "Invalid secret code", Toast.LENGTH_SHORT).show();
             binding.etSecretCode.setText("");
             binding.etSecretCode.requestFocus();
         }

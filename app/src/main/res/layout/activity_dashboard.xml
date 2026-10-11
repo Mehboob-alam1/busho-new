@@ -277,50 +277,45 @@
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/btnChat"
                 android:layout_width="match_parent"
-                android:layout_height="196dp"
-                android:layout_marginBottom="14dp"
+                android:layout_height="300dp"
+                android:layout_marginBottom="8dp"
                 android:clickable="true"
                 android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
                 app:cardBackgroundColor="@android:color/transparent"
                 app:cardCornerRadius="28dp"
-                app:cardElevation="10dp"
+                app:cardElevation="12dp"
                 app:strokeWidth="0dp">
 
-                <LinearLayout
+                <FrameLayout
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/bg_tile_chat"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:padding="22dp">
+                    android:layout_height="match_parent">
 
-                    <FrameLayout
-                        android:layout_width="64dp"
-                        android:layout_height="64dp"
-                        android:background="@drawable/bg_icon_bubble">
+                    <ImageView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="@string/home_chat_title"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/bg_dashboard_chat_button" />
 
-                        <ImageView
-                            android:layout_width="34dp"
-                            android:layout_height="34dp"
-                            android:layout_gravity="center"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_home_chat" />
-                    </FrameLayout>
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_chat_tile_scrim" />
 
                     <LinearLayout
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:layout_gravity="bottom"
+                        android:orientation="vertical"
+                        android:padding="20dp">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/home_chat_title"
                             android:textColor="@color/white"
-                            android:textSize="22sp"
+                            android:textSize="24sp"
                             android:textStyle="bold" />
 
                         <TextView
@@ -328,34 +323,31 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="4dp"
                             android:text="@string/home_chat_desc"
-                            android:textColor="#DDF3FF"
+                            android:textColor="#F5F5F5"
                             android:textSize="14sp" />
                     </LinearLayout>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:background="@drawable/bg_home_chip"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="8dp"
-                        android:text="@string/home_chip_chat"
-                        android:textColor="@color/sky"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
+                </FrameLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <com.google.android.material.card.MaterialCardView
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp">
+
+                <com.google.android.material.card.MaterialCardView
                     android:id="@+id/btnContacts"
-                    android:layout_width="match_parent"
-                    android:layout_height="176dp"
+                    android:layout_width="76dp"
+                    android:layout_height="76dp"
+                    android:layout_gravity="end|center_vertical"
                     android:clickable="true"
+                    android:contentDescription="@string/home_games_title"
                     android:focusable="true"
-                    android:foreground="?attr/selectableItemBackground"
-                    app:cardBackgroundColor="@android:color/transparent"
-                    app:cardCornerRadius="24dp"
+                    android:foreground="?attr/selectableItemBackgroundBorderless"
+                    app:cardBackgroundColor="#E6FFFFFF"
+                    app:cardCornerRadius="38dp"
                     app:cardElevation="8dp"
-                    app:strokeWidth="0dp">
+                    app:strokeColor="#33FFFFFF"
+                    app:strokeWidth="1dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -363,41 +355,26 @@
                         android:background="@drawable/bg_tile_games"
                         android:gravity="center"
                         android:orientation="vertical"
-                        android:padding="16dp">
+                        android:padding="8dp">
 
-                        <FrameLayout
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
-                            android:background="@drawable/bg_icon_bubble">
-
-                            <ImageView
-                                android:layout_width="28dp"
-                                android:layout_height="28dp"
-                                android:layout_gravity="center"
-                                android:contentDescription="@null"
-                                android:src="@drawable/ic_home_games" />
-                        </FrameLayout>
+                        <ImageView
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_home_games"
+                            app:tint="@color/white" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="14dp"
-                            android:gravity="center"
+                            android:layout_marginTop="2dp"
                             android:text="@string/home_games_title"
                             android:textColor="@color/white"
-                            android:textSize="16sp"
+                            android:textSize="9sp"
                             android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:gravity="center"
-                            android:text="@string/home_games_desc"
-                            android:textColor="#FFF2DF"
-                            android:textSize="12sp" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
+            </FrameLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"

@@ -6,7 +6,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.GridLayout;
 import android.widget.TextView;
-import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.bushorat.chatapp.R;
@@ -73,7 +72,6 @@ public class ColorTapGameActivity extends AppCompatActivity {
 
     private void nextRound() {
         if (rounds >= maxRounds) {
-            Toast.makeText(this, "Game Over! +" + score + " points", Toast.LENGTH_LONG).show();
             FirebaseUtils.updatePoints(userId, score);
             finish();
             return;
@@ -87,9 +85,7 @@ public class ColorTapGameActivity extends AppCompatActivity {
     private void handleTap(String tappedColor) {
         if (tappedColor.equals(currentTarget)) {
             score += 5;
-            Toast.makeText(this, "+5", Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, "Wrong!", Toast.LENGTH_SHORT).show();
         }
         nextRound();
     }

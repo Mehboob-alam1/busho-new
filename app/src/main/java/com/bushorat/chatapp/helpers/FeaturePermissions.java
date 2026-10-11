@@ -228,6 +228,17 @@ public final class FeaturePermissions {
                 REQ_PROFILE_LOCATION);
     }
 
+    public static boolean hasCallPermissions(Context context) {
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    public static String[] callPermissions() {
+        return new String[]{Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO};
+    }
+
     public static boolean allGranted(int[] grantResults) {
         if (grantResults == null || grantResults.length == 0) {
             return false;

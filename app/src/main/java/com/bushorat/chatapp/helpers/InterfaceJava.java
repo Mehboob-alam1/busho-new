@@ -21,4 +21,9 @@ public class InterfaceJava {
     public void onPeerError(String message) {
         callActivity.onPeerError(message);
     }
+
+    @JavascriptInterface
+    public void onRemoteConnected() {
+        callActivity.onRemoteConnected();
+    }
 }

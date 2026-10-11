@@ -81,8 +81,7 @@ export default function LoginPage() {
         </button>
 
         <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-          Use your admin account to continue. First successful login sets up Firebase Auth
-          automatically.
+          Sign in with the admin account configured in Firebase Authentication.
         </p>
       </form>
     </div>

@@ -4,7 +4,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.widget.GridLayout;
 import android.widget.ImageView;
-import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -86,14 +85,12 @@ public class MemoryGameActivity extends AppCompatActivity {
 
     private void checkMatch() {
         if ((int) firstCard.getTag() == (int) secondCard.getTag()) {
-            Toast.makeText(this, "Match! +10 pts", Toast.LENGTH_SHORT).show();
             firstCard.setEnabled(false);
             secondCard.setEnabled(false);
             matchedPairs++;
             score += 10;
 
             if (matchedPairs == 3) {
-                Toast.makeText(this, "Game Complete! +" + score + " pts", Toast.LENGTH_LONG).show();
                 FirebaseUtils.updatePoints(userId, score);
                 finish(); // exit
             }

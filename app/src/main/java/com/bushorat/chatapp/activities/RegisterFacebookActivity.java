@@ -4,7 +4,6 @@ import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -49,7 +48,6 @@ public class RegisterFacebookActivity extends AppCompatActivity {
             String address = binding.etAddress.getText().toString().trim();
 
             if (name.isEmpty() || email.isEmpty() || password.isEmpty() || whatsapp.isEmpty() || address.isEmpty()) {
-                Toast.makeText(this, "Please fill all required fields", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -72,7 +70,6 @@ public class RegisterFacebookActivity extends AppCompatActivity {
                     sessionManager.createUserSession(userId, email);
                     Log.d(TAG, "onSuccess: Session created for user");
                     
-                    Toast.makeText(RegisterFacebookActivity.this, "Signup Successful!", Toast.LENGTH_SHORT).show();
                     
                     // Route based on email verification status
                     boolean verified = FirebaseAuth.getInstance().getCurrentUser().isEmailVerified();
@@ -105,7 +102,6 @@ public class RegisterFacebookActivity extends AppCompatActivity {
                         @Override
                         public void onFailure(String errorMessage2) {
                             loadingDialog.dismiss();
-                            Toast.makeText(RegisterFacebookActivity.this, "Error: " + errorMessage2, Toast.LENGTH_LONG).show();
                         }
                     });
                 }

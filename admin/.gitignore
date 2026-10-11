@@ -1,5 +1,6 @@
 node_modules/
 dist/
+# Local Firebase and admin credentials; keep .env.example as the template.
 .env
 .env.*
 !.env.example

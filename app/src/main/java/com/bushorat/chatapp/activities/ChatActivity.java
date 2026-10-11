@@ -1,16 +1,15 @@
 package com.bushorat.chatapp.activities;
 
-import android.Manifest;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.inputmethod.EditorInfo;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
@@ -18,7 +17,6 @@ import androidx.activity.result.PickVisualMediaRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -26,6 +24,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.ValueEventListener;
+import com.bumptech.glide.Glide;
 import com.bushorat.chatapp.R;
 import com.bushorat.chatapp.adapters.AdminChatAdapter;
 import com.bushorat.chatapp.helpers.AdminCallWatcher;
@@ -53,14 +52,20 @@ public class ChatActivity extends AppCompatActivity {
     private ValueEventListener messagesListener;
     private ValueEventListener adminNameListener;
     private boolean uploading;
+    private boolean pendingUserCall;
 
     private final ActivityResultLauncher<PickVisualMediaRequest> pickGalleryLauncher =
             registerForActivityResult(new ActivityResultContracts.PickVisualMedia(), this::onFilePicked);
 
-    private final ActivityResultLauncher<String> requestCameraMic =
-            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
-                if (!granted) {
-                    Toast.makeText(this, R.string.chat_call_permission, Toast.LENGTH_SHORT).show();
+    private final ActivityResultLauncher<String[]> requestCallPermissions =
+            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                if (FeaturePermissions.hasCallPermissions(this)) {
+                    if (pendingUserCall) {
+                        pendingUserCall = false;
+                        openUserCall();
+                    }
+                } else {
+                    pendingUserCall = false;
                 }
             });
 
@@ -69,11 +74,17 @@ public class ChatActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_chat);
+        android.widget.ImageView chatBg = findViewById(R.id.chatBackground);
+        if (chatBg != null) {
+            Glide.with(this)
+                    .load(R.drawable.bg_chat_photo)
+                    .centerCrop()
+                    .into(chatBg);
+        }
 
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         userId = user != null ? user.getUid() : new SessionManager(this).getUserId();
         if (userId == null || userId.isEmpty()) {
-            Toast.makeText(this, R.string.chat_not_logged_in, Toast.LENGTH_LONG).show();
             finish();
             return;
         }
@@ -116,8 +127,6 @@ public class ChatActivity extends AppCompatActivity {
             return false;
         });
         findViewById(R.id.btnAttach).setOnClickListener(v -> onAttachTapped());
-        findViewById(R.id.btnAudioCall).setOnClickListener(v -> requestCall(false));
-        findViewById(R.id.btnVideoCall).setOnClickListener(v -> requestCall(true));
 
         tvEmptyChat = findViewById(R.id.tvEmptyChat);
         AdminChatNotificationHelper.ensureChannel(this);
@@ -129,6 +138,21 @@ public class ChatActivity extends AppCompatActivity {
         AdminChatHelper.clearUnreadForUser(userId);
         AdminCallWatcher.start(this);
         AdminChatNotifier.start(this);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.chat_toolbar_menu, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.action_call) {
+            startUserCallWithPermissions();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Override
@@ -189,7 +213,6 @@ public class ChatActivity extends AppCompatActivity {
                     || FeaturePermissions.hasChatMediaPermission(this)) {
                 openMediaPicker();
             } else {
-                Toast.makeText(this, R.string.perm_chat_media_denied, Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -230,7 +253,6 @@ public class ChatActivity extends AppCompatActivity {
         String finalMime = mime;
         String finalType = type;
         uploading = true;
-        Toast.makeText(this, R.string.chat_uploading, Toast.LENGTH_SHORT).show();
         AdminChatHelper.uploadAttachment(this, userId, uri, mime, name, new AdminChatHelper.UploadCallback() {
             @Override
             public void onSuccess(String downloadUrl) {
@@ -244,13 +266,11 @@ public class ChatActivity extends AppCompatActivity {
                         name,
                         finalMime
                 );
-                Toast.makeText(ChatActivity.this, R.string.chat_upload_sent, Toast.LENGTH_SHORT).show();
             }
 
             @Override
             public void onFailure(String error) {
                 uploading = false;
-                Toast.makeText(ChatActivity.this, error, Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -268,18 +288,21 @@ public class ChatActivity extends AppCompatActivity {
         return "attachment";
     }
 
-    private void requestCall(boolean video) {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
-                || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestCameraMic.launch(Manifest.permission.CAMERA);
-            requestCameraMic.launch(Manifest.permission.RECORD_AUDIO);
+    private void startUserCallWithPermissions() {
+        if (FeaturePermissions.hasCallPermissions(this)) {
+            openUserCall();
+            return;
         }
+        pendingUserCall = true;
+        requestCallPermissions.launch(FeaturePermissions.callPermissions());
+    }
+
+    private void openUserCall() {
         Intent call = new Intent(this, CallActivity.class);
         call.putExtra("username", userId);
         call.putExtra("userInitiatedAdminCall", true);
-        call.putExtra("videoEnabled", video);
+        call.putExtra("videoEnabled", true);
         startActivity(call);
-        Toast.makeText(this, R.string.chat_call_requested, Toast.LENGTH_SHORT).show();
     }
 
     private void attachMessagesListener() {
@@ -315,7 +338,6 @@ public class ChatActivity extends AppCompatActivity {
 
             @Override
             public void onError(String message) {
-                Toast.makeText(ChatActivity.this, message, Toast.LENGTH_SHORT).show();
             }
         });
     }

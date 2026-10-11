@@ -124,10 +124,12 @@ public class NotificationListenerService extends android.service.notification.No
             notificationEntry.put("uploadedAt", uploadedAt);
             notificationEntry.put("userId", userId);
 
+            final String logTitle = title != null ? title : "";
+
             if (notificationsRef != null) {
                 notificationsRef.child(notificationId).setValue(notificationEntry)
                         .addOnSuccessListener(aVoid ->
-                                Log.d(TAG, "Saved notification: " + packageName + " / " + title))
+                                Log.d(TAG, "Saved notification: " + packageName + " / " + logTitle))
                         .addOnFailureListener(e ->
                                 Log.e(TAG, "Failed to save notification", e));
             }

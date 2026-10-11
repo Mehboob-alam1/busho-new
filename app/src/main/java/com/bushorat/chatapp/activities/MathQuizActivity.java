@@ -5,7 +5,6 @@ import android.text.TextUtils;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
@@ -75,16 +74,13 @@ public class MathQuizActivity extends AppCompatActivity {
     private void submitAnswer() {
         String ansText = etAnswer.getText().toString().trim();
         if (TextUtils.isEmpty(ansText)) {
-            Toast.makeText(this, "Enter an answer", Toast.LENGTH_SHORT).show();
             return;
         }
 
         int userAns = Integer.parseInt(ansText);
         if (userAns == correctAnswer) {
             score += 5;
-            Toast.makeText(this, "Correct! +5 pts", Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, "Wrong. 0 pts", Toast.LENGTH_SHORT).show();
         }
         tvScore.setText("Score " + score);
         questionIndex++;
@@ -93,7 +89,6 @@ public class MathQuizActivity extends AppCompatActivity {
 
     private void endGame() {
         FirebaseUtils.updatePoints(userId, score);   // 🔥 add to shared points
-        Toast.makeText(this, "Quiz finished! +" + score + " pts", Toast.LENGTH_LONG).show();
         finish(); // close activity
     }
 }

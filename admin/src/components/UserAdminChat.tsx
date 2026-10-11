@@ -67,9 +67,11 @@ type ActiveCall = {
 export default function UserAdminChat({
   userId,
   userDisplayName,
+  chatFocused = false,
 }: {
   userId: string;
   userDisplayName: string;
+  chatFocused?: boolean;
 }) {
   const [messages, setMessages] = useState<AdminChatMessage[]>([]);
   const [text, setText] = useState("");
@@ -89,6 +91,8 @@ export default function UserAdminChat({
   const peerRef = useRef<PeerInstance | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const callSignalSeenRef = useRef(false);
+  const userPeerDialedRef = useRef(false);
 
   useEffect(() => {
     const unsub = watchAdminDisplayName((name) => {
@@ -103,12 +107,20 @@ export default function UserAdminChat({
       userId,
       (list) => {
         setMessages(list);
-        void markAdminChatRead(userId);
+        if (chatFocused) {
+          void markAdminChatRead(userId);
+        }
       },
       (err) => console.error(err)
     );
     return unsub;
-  }, [userId]);
+  }, [userId, chatFocused]);
+
+  useEffect(() => {
+    if (chatFocused) {
+      void markAdminChatRead(userId);
+    }
+  }, [chatFocused, userId]);
 
   useEffect(() => {
     const unsub = watchAdminCallSignal(userId, setCallSignal);
@@ -118,6 +130,79 @@ export default function UserAdminChat({
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
+
+  function teardownLocalCall() {
+    peerRef.current?.destroy();
+    peerRef.current = null;
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+  }
+
+  useEffect(() => {
+    if (callSignal) {
+      callSignalSeenRef.current = true;
+    }
+  }, [callSignal]);
+
+  useEffect(() => {
+    if (!activeCall) {
+      callSignalSeenRef.current = false;
+      return;
+    }
+    if (callSignal?.status === "ended") {
+      teardownLocalCall();
+      setActiveCall(null);
+      setCallStatus("Call ended");
+      setCallError("");
+      callSignalSeenRef.current = false;
+      return;
+    }
+    if (!callSignal && callSignalSeenRef.current) {
+      teardownLocalCall();
+      setActiveCall(null);
+      setCallStatus("Call ended");
+      setCallError("");
+      callSignalSeenRef.current = false;
+    }
+  }, [callSignal, activeCall]);
+
+  useEffect(() => {
+    if (!activeCall || !callSignal?.userPeerId || !peerRef.current || !streamRef.current) {
+      return;
+    }
+    if (userPeerDialedRef.current || callStatus === "Connected") {
+      return;
+    }
+    const target = callSignal.userPeerId;
+    const peer = peerRef.current;
+    const stream = streamRef.current;
+
+    const tryDial = (left: number) => {
+      setCallStatus(left > 10 ? "User answered — connecting…" : "Connecting to user…");
+      try {
+        const outgoing = peer.call(target, stream);
+        if (outgoing) {
+          userPeerDialedRef.current = true;
+          outgoing.on("stream", (...streamArgs: unknown[]) => {
+            const remoteStream = streamArgs[0] as MediaStream;
+            setCallStatus("Connected");
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = remoteStream;
+            }
+          });
+          return;
+        }
+      } catch {
+        /* retry */
+      }
+      if (left > 0) {
+        setTimeout(() => tryDial(left - 1), 450);
+      }
+    };
+    tryDial(25);
+  }, [callSignal?.userPeerId, activeCall, callStatus]);
 
   useEffect(() => {
     if (!activeCall) return;
@@ -160,24 +245,38 @@ export default function UserAdminChat({
           });
         });
 
-        peer.on("open", () => {
-          if (cancelled || !dialUserPeerId) {
-            setCallStatus(
-              dialUserPeerId
-                ? "Joining…"
-                : "Waiting for the app user to join…"
-            );
+        const dialWhenReady = (attemptsLeft: number) => {
+          if (cancelled) return;
+          if (!dialUserPeerId) {
+            setCallStatus("Waiting for the user to tap Answer on their phone…");
             return;
           }
-          setCallStatus("Calling user…");
-          const outgoing = peer.call(dialUserPeerId, stream);
-          outgoing.on("stream", (...streamArgs: unknown[]) => {
-            const remoteStream = streamArgs[0] as MediaStream;
-            setCallStatus("Connected");
-            if (remoteVideoRef.current) {
-              remoteVideoRef.current.srcObject = remoteStream;
+          setCallStatus(attemptsLeft > 12 ? "Joining…" : "Calling user…");
+          try {
+            const outgoing = peer.call(dialUserPeerId, stream);
+            if (outgoing) {
+              outgoing.on("stream", (...streamArgs: unknown[]) => {
+                const remoteStream = streamArgs[0] as MediaStream;
+                setCallStatus("Connected");
+                if (remoteVideoRef.current) {
+                  remoteVideoRef.current.srcObject = remoteStream;
+                }
+              });
+              return;
             }
-          });
+          } catch {
+            /* retry */
+          }
+          if (attemptsLeft > 0) {
+            setTimeout(() => dialWhenReady(attemptsLeft - 1), 400);
+          } else {
+            setCallError("Could not reach the user. Ask them to open the app.");
+          }
+        };
+
+        peer.on("open", () => {
+          if (cancelled) return;
+          dialWhenReady(20);
         });
 
         peer.on("error", (...args: unknown[]) => {
@@ -191,10 +290,7 @@ export default function UserAdminChat({
 
     return () => {
       cancelled = true;
-      peerRef.current?.destroy();
-      peerRef.current = null;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
+      teardownLocalCall();
     };
   }, [activeCall]);
 
@@ -246,7 +342,10 @@ export default function UserAdminChat({
         callSignal?.status === "requested" && callSignal?.from === "user"
           ? callSignal.userPeerId
           : undefined;
+      callSignalSeenRef.current = false;
+      userPeerDialedRef.current = false;
       const connId = await initiateAdminCall(userId, video);
+      callSignalSeenRef.current = true;
       setActiveCall({ connId, video, dialUserPeerId });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Could not start call");
@@ -254,8 +353,10 @@ export default function UserAdminChat({
   }
 
   async function endCall() {
+    teardownLocalCall();
     setActiveCall(null);
-    setCallStatus("");
+    setCallStatus("Call ended");
+    setCallError("");
     await clearAdminCall(userId);
   }
 

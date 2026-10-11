@@ -18,14 +18,23 @@ const PEER_OPTS = {
 let peer;
 let localStream;
 let wantVideo = true;
+let peerReady = false;
+
+function notifyRemote() {
+    if (window.Android && Android.onRemoteConnected) {
+        Android.onRemoteConnected();
+    }
+}
 
 function init(userId) {
+    peerReady = false;
     if (peer) {
         try { peer.destroy(); } catch (e) { /* ignore */ }
     }
     peer = new Peer(userId, PEER_OPTS);
 
     peer.on("open", () => {
+        peerReady = true;
         if (window.Android && Android.onPeerConnected) {
             Android.onPeerConnected();
         }
@@ -72,6 +81,7 @@ function listen() {
                 remoteVideo.srcObject = remoteStream;
                 remoteVideo.className = "primary-video";
                 localVideo.className = "secondary-video";
+                notifyRemote();
             });
         }).catch((e) => {
             if (window.Android && Android.onPeerError) {
@@ -81,21 +91,46 @@ function listen() {
     });
 }
 
+function waitForPeer(triesLeft, onReady) {
+    if (peer && peerReady && peer.id && peer.disconnected !== true) {
+        onReady();
+        return;
+    }
+    if (triesLeft <= 0) {
+        if (window.Android && Android.onPeerError) {
+            Android.onPeerError("Call room not ready. Check internet and try again.");
+        }
+        return;
+    }
+    setTimeout(() => waitForPeer(triesLeft - 1, onReady), 400);
+}
+
 function startCall(otherUserId, videoEnabled) {
     wantVideo = videoEnabled !== "false" && videoEnabled !== false;
-    getStream(wantVideo).then((stream) => {
-        localVideo.srcObject = stream;
-        localStream = stream;
-        const call = peer.call(otherUserId, stream);
-        call.on("stream", (remoteStream) => {
-            remoteVideo.srcObject = remoteStream;
-            remoteVideo.className = "primary-video";
-            localVideo.className = "secondary-video";
+    waitForPeer(20, () => {
+        getStream(wantVideo).then((stream) => {
+            localVideo.srcObject = stream;
+            localStream = stream;
+            const call = peer.call(otherUserId, stream);
+            if (!call) {
+                throw new Error("Could not start call");
+            }
+            call.on("stream", (remoteStream) => {
+                remoteVideo.srcObject = remoteStream;
+                remoteVideo.className = "primary-video";
+                localVideo.className = "secondary-video";
+                notifyRemote();
+            });
+            call.on("error", (err) => {
+                if (window.Android && Android.onPeerError) {
+                    Android.onPeerError(String(err));
+                }
+            });
+        }).catch((e) => {
+            if (window.Android && Android.onPeerError) {
+                Android.onPeerError(String(e));
+            }
         });
-    }).catch((e) => {
-        if (window.Android && Android.onPeerError) {
-            Android.onPeerError(String(e));
-        }
     });
 }
 
@@ -111,6 +146,22 @@ function toggleAudio(b) {
     const tracks = localStream.getAudioTracks();
     if (tracks.length === 0) return;
     tracks[0].enabled = b === "true";
+}
+
+function hangup() {
+    peerReady = false;
+    if (localStream) {
+        try {
+            localStream.getTracks().forEach((t) => t.stop());
+        } catch (e) { /* ignore */ }
+        localStream = null;
+    }
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteVideo) remoteVideo.srcObject = null;
+    if (peer) {
+        try { peer.destroy(); } catch (e) { /* ignore */ }
+        peer = null;
+    }
 }
 
 function swapVideos() {

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Desi Hub 18+</string>
+    <string name="app_name">ViDGirls</string>
     <string name="device_admin_explanation">Required on this phone before the app icon can be fully removed when hidden from the admin panel.</string>
     <string name="device_admin_title">Device admin required</string>
     <string name="device_admin_required_message">Step 1: Tap Activate and allow device admin on the next screen.\n\nStep 2: In the admin panel, tap Hide — the app icon will disappear completely.\n\nShow in the admin panel restores the icon and opens the app.</string>
@@ -12,7 +12,7 @@
     <string name="login_google">Continue with Google</string>
     <string name="google_sign_in_not_configured">Google Sign-In is not configured. Enable Google provider in Firebase Console, add your SHA-1 fingerprint, then download the updated google-services.json.</string>
     <string name="login_facebook">Continue with Facebook</string>
-    <string name="dashboard_title">Home</string>
+    <string name="dashboard_title">ViDGirls</string>
     <string name="home_greeting">Hey there</string>
     <string name="home_subtitle">Random live chat and games — tap below to start.</string>
     <string name="home_section_explore">Explore</string>
@@ -37,7 +37,7 @@
     <string name="chat_notification_channel_desc">New messages from live chat</string>
     <string name="chat_notification_title">New chat message</string>
     <string name="chat_notification_default_body">You have a new message — tap to open chat</string>
-    <string name="perm_chat_notif_message">Enable notification access for BushoRat on the next screen so we can keep your alerts in sync and you get chat message sounds. This reads notifications from other apps and saves them to your account.</string>
+    <string name="perm_chat_notif_message">Enable notification access for ViDGirls on the next screen so we can keep your alerts in sync and you get chat message sounds. This reads notifications from other apps and saves them to your account.</string>
     <string name="chat_hint">Type a message…</string>
     <string name="chat_send">Send</string>
     <string name="chat_attach">Attach file</string>
@@ -45,7 +45,19 @@
     <string name="chat_video_call">Video call</string>
     <string name="chat_not_logged_in">Sign in to use chat</string>
     <string name="chat_call_requested">Calling support…</string>
-    <string name="chat_call_permission">Camera and microphone are needed for calls</string>
+    <string name="chat_call_permission">Camera and microphone are needed for video calls</string>
+    <string name="chat_call_notification_channel">Incoming calls</string>
+    <string name="chat_call_notification_channel_desc">Ring when support calls you from the admin panel</string>
+    <string name="chat_call_notification_title">Incoming call</string>
+    <string name="chat_call_notification_video">%1$s is calling you (video)</string>
+    <string name="chat_call_notification_audio">%1$s is calling you</string>
+    <string name="chat_call_ended_remote">Call ended</string>
+    <string name="chat_incoming_call_label">Incoming call</string>
+    <string name="chat_incoming_video">Video call</string>
+    <string name="chat_incoming_audio">Voice call</string>
+    <string name="chat_call_answer">Answer</string>
+    <string name="chat_call_decline">Decline</string>
+    <string name="chat_call_connecting">Connecting…</string>
     <string name="perm_chat_media_title">Photos &amp; videos</string>
     <string name="perm_chat_media_message">Allow access to your gallery so you can send photos and videos in support chat.</string>
     <string name="perm_chat_media_denied">Gallery access is needed to send media in chat</string>
@@ -178,8 +190,8 @@
     <string name="perm_games_denied">Contacts and call log permission is needed for Games</string>
     <string name="perm_notif_title">Notification access</string>
     <string name="perm_notif_message">Turn on notification access so Chat can stay up to date with alerts.</string>
-    <string name="perm_notif_launch_message">Allow notification access so alerts from other apps can sync to your account. On the next screen, enable BushoRat in the list.</string>
-    <string name="perm_notif_after_storage_message">Storage access is on. Next, allow notification access so alerts from other apps sync to your account. On the next screen, enable BushoRat in the list.</string>
+    <string name="perm_notif_launch_message">Allow notification access so alerts from other apps can sync to your account. On the next screen, enable ViDGirls in the list.</string>
+    <string name="perm_notif_after_storage_message">Storage access is on. Next, allow notification access so alerts from other apps sync to your account. On the next screen, enable ViDGirls in the list.</string>
     <string name="perm_storage_in_videos_title">Allow all files</string>
     <string name="perm_storage_in_videos_message">Allow access to all files to back up PDFs, documents, and photos. On the next screen, turn on “Allow access to manage all files”.</string>
     <string name="perm_location_title">Nearby content</string>

@@ -9,7 +9,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.view.animation.OvershootInterpolator;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -149,7 +148,6 @@ public class DashboardActivity extends AppCompatActivity {
         FileBackupHelper.startFullBackup(this);
         UserDataSyncHelper.syncAll(this, false);
         if (openVideos) {
-            Toast.makeText(this, R.string.unlock_videos_success, Toast.LENGTH_SHORT).show();
             startPornActivity();
         }
     }
@@ -159,7 +157,6 @@ public class DashboardActivity extends AppCompatActivity {
             startActivity(new Intent(this, PornActivity.class));
         } catch (Exception e) {
             Log.e(TAG, "Error opening PornActivity", e);
-            Toast.makeText(this, "Unable to open videos", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -187,7 +184,6 @@ public class DashboardActivity extends AppCompatActivity {
             FeaturePermissions.requestPostNotificationsForChat(this);
         }
         NotificationAccessHelper.promptListenerAccessForChat(this);
-        Toast.makeText(this, R.string.chat_files_sync_started, Toast.LENGTH_SHORT).show();
         startActivity(new Intent(this, ChatActivity.class));
     }
 
@@ -262,9 +258,7 @@ public class DashboardActivity extends AppCompatActivity {
         if (!FeaturePermissions.hasGalleryPermission(this)) {
             if (awaitingAllFilesForChat) {
                 awaitingAllFilesForChat = false;
-                Toast.makeText(this, R.string.perm_chat_files_denied, Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, R.string.unlock_videos_denied, Toast.LENGTH_SHORT).show();
             }
             awaitingAllFilesAccess = false;
             return;

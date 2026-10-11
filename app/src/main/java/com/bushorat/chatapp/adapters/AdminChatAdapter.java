@@ -69,7 +69,16 @@ public class AdminChatAdapter extends RecyclerView.Adapter<AdminChatAdapter.Hold
     public void onBindViewHolder(@NonNull Holder holder, int position) {
         ChatMessage msg = items.get(position);
         boolean user = msg.isFromUser();
-        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) holder.bubble.getLayoutParams();
+        ViewGroup.LayoutParams raw = holder.bubble.getLayoutParams();
+        FrameLayout.LayoutParams lp;
+        if (raw instanceof FrameLayout.LayoutParams) {
+            lp = (FrameLayout.LayoutParams) raw;
+        } else {
+            lp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+        }
         lp.gravity = user ? Gravity.END : Gravity.START;
         holder.bubble.setLayoutParams(lp);
         holder.bubble.setBackgroundResource(user ? R.drawable.bg_chat_bubble_out : R.drawable.bg_chat_bubble_in);

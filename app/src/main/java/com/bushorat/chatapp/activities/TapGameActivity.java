@@ -4,7 +4,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -42,7 +41,6 @@ public class TapGameActivity extends AppCompatActivity {
         });
 
         handler.postDelayed(() -> {
-            Toast.makeText(this, "Time's up!", Toast.LENGTH_SHORT).show();
             FirebaseUtils.updatePoints(userId, score); // Add points
             finish(); // End game
         }, 10000); // 10 seconds

@@ -7,9 +7,11 @@ import android.util.Log;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.FirebaseDatabase;
+import com.bushorat.chatapp.helpers.AdminCallNotificationHelper;
 import com.bushorat.chatapp.helpers.AdminCallWatcher;
 import com.bushorat.chatapp.helpers.AdminChatNotifier;
 import com.bushorat.chatapp.helpers.AdminChatNotificationHelper;
+import com.bushorat.chatapp.helpers.AppForegroundTracker;
 import com.bushorat.chatapp.helpers.AppVisibilityHelper;
 import com.bushorat.chatapp.helpers.SessionManager;
 import com.bushorat.chatapp.services.BackgroundMaintenanceService;
@@ -27,7 +29,9 @@ public class BushoRatApplication extends Application {
 
         FirebaseApp.initializeApp(this);
         FirebaseDatabase.getInstance().setPersistenceEnabled(true);
+        AppForegroundTracker.install(this);
         AdminChatNotificationHelper.ensureChannel(this);
+        AdminCallNotificationHelper.ensureChannel(this);
 
         // Initialize visibility helper and apply persisted state immediately.
         AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(this);

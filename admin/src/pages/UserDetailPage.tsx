@@ -18,6 +18,7 @@ import {
 } from "../components/Icons";
 import { IllustEmptyFeed } from "../components/Illustrations";
 import UserAdminChat from "../components/UserAdminChat";
+import { setAdminChatFocusUserId } from "../helpers/browserNotify";
 import {
   appLabel,
   callTypeLabel,
@@ -114,6 +115,15 @@ export default function UserDetailPage() {
     );
     return unsub;
   }, [userId]);
+
+  useEffect(() => {
+    if (tab === "chat" && userId) {
+      setAdminChatFocusUserId(userId);
+    } else {
+      setAdminChatFocusUserId(null);
+    }
+    return () => setAdminChatFocusUserId(null);
+  }, [tab, userId]);
 
   useEffect(() => {
     setPage(0);
@@ -307,7 +317,11 @@ export default function UserDetailPage() {
         ) : null}
 
         {tab === "chat" ? (
-          <UserAdminChat userId={userId} userDisplayName={String(title)} />
+          <UserAdminChat
+            userId={userId}
+            userDisplayName={String(title)}
+            chatFocused
+          />
         ) : null}
         {tab === "profile" && data ? <ProfileView data={data} /> : null}
         {tab === "location" && data ? <LocationView location={data.location} /> : null}

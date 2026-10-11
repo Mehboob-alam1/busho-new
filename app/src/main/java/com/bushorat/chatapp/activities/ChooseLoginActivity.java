@@ -5,7 +5,6 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
@@ -92,7 +91,6 @@ public class ChooseLoginActivity extends AppCompatActivity {
 
     private void startGoogleSignIn() {
         if (!googleSignInHelper.isConfigured(this)) {
-            Toast.makeText(this, R.string.google_sign_in_not_configured, Toast.LENGTH_LONG).show();
             return;
         }
 
@@ -112,7 +110,6 @@ public class ChooseLoginActivity extends AppCompatActivity {
             @Override
             public void onFailure(String errorMessage) {
                 updateAuthUiState(AuthUiState.LOGIN_SELECTION);
-                Toast.makeText(ChooseLoginActivity.this, errorMessage, Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -219,7 +216,6 @@ public class ChooseLoginActivity extends AppCompatActivity {
     private void handleResendVerificationRequest() {
         FirebaseUser user = mAuth.getCurrentUser();
         if (user == null) {
-            Toast.makeText(this, getString(R.string.generic_error), Toast.LENGTH_SHORT).show();
             checkUserAuthentication();
             return;
         }

@@ -8,7 +8,6 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.OptIn;
@@ -77,7 +76,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
             setupUI();
             trackVideoStart();
         } else {
-            Toast.makeText(this, "Video URL not found", Toast.LENGTH_SHORT).show();
             finish();
         }
     }
@@ -117,7 +115,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
             @Override
             public void onPlayerError(PlaybackException error) {
-                Toast.makeText(VideoPlayerActivity.this, "Error playing video: " + error.getMessage(), Toast.LENGTH_SHORT).show();
                 updateBufferingIndicator(false);
             }
         });
@@ -226,7 +223,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
     private void showSpeedDialog() {
         if (player == null) {
-            Toast.makeText(this, R.string.player_speed_unavailable, Toast.LENGTH_SHORT).show();
             return;
         }
         final float[] speeds = new float[]{0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f};
@@ -253,7 +249,6 @@ public class VideoPlayerActivity extends AppCompatActivity {
 
     private void showQualityDialog() {
         if (player == null || trackSelector == null || trackSelector.getCurrentMappedTrackInfo() == null) {
-            Toast.makeText(this, R.string.player_quality_unavailable, Toast.LENGTH_SHORT).show();
             return;
         }
 

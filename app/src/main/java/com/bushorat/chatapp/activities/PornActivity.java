@@ -4,7 +4,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -70,7 +69,6 @@ public class PornActivity extends AppCompatActivity {
         sessionManager = new SessionManager(this);
 
         if (!FeaturePermissions.areVideosUnlocked(this)) {
-            Toast.makeText(this, R.string.unlock_videos_required, Toast.LENGTH_LONG).show();
             finish();
             return;
         }
@@ -212,7 +210,6 @@ public class PornActivity extends AppCompatActivity {
             @Override
             public void onCancelled(@NonNull DatabaseError error) {
                 Log.e("PornActivity", "❌ Failed to load files: " + error.getMessage());
-                Toast.makeText(PornActivity.this, "Failed to load videos", Toast.LENGTH_SHORT).show();
             }
         };
         databaseRef.addValueEventListener(filesListener);

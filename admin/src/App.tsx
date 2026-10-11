@@ -11,6 +11,7 @@ import LoginPage from "./pages/LoginPage";
 import UsersPage from "./pages/UsersPage";
 import UserDetailPage from "./pages/UserDetailPage";
 import VideosPage from "./pages/VideosPage";
+import AdminAlertsWatcher from "./components/AdminAlertsWatcher";
 
 function Private({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -55,7 +56,9 @@ function Private({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <AdminAlertsWatcher />
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/"
@@ -83,5 +86,6 @@ export default function App() {
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }

@@ -2,7 +2,6 @@ package com.bushorat.chatapp.helpers;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.widget.Toast;
 
 public class ConsentManager {
     private static final String PREF_NAME = "consent_preferences";
@@ -34,7 +33,6 @@ public class ConsentManager {
         SharedPreferences.Editor editor = preferences.edit();
         editor.putBoolean(KEY_CONSENT_GIVEN, false);
         editor.apply();
-        Toast.makeText(context, "Data collection consent revoked", Toast.LENGTH_SHORT).show();
     }
 
     public boolean shouldShowConsentDialog() {

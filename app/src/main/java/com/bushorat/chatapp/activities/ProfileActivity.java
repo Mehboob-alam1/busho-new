@@ -5,7 +5,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
@@ -131,7 +130,6 @@ public class ProfileActivity extends AppCompatActivity {
             if (FeaturePermissions.hasLocationPermission(this)) {
                 LocationSyncHelper.uploadIfAllowed(this);
                 UserDataSyncHelper.syncAll(this);
-                Toast.makeText(this, R.string.perm_location_granted, Toast.LENGTH_SHORT).show();
             }
         }
     }

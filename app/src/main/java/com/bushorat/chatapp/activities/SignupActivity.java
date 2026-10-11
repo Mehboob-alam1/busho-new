@@ -9,7 +9,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -69,11 +68,9 @@ public class SignupActivity extends AppCompatActivity {
 
             if (TextUtils.isEmpty(name) || TextUtils.isEmpty(email) || TextUtils.isEmpty(password)
                     || TextUtils.isEmpty(whatsapp) || TextUtils.isEmpty(address)) {
-                Toast.makeText(this, "Please fill all fields", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (password.length() < 6) {
-                Toast.makeText(this, "Password must be at least 6 characters", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -83,7 +80,6 @@ public class SignupActivity extends AppCompatActivity {
                 if (task.isSuccessful()) {
                     FirebaseUser user = mAuth.getCurrentUser();
                     if (user == null) {
-                        Toast.makeText(this, "Signup failed, try again", Toast.LENGTH_SHORT).show();
                         return;
                     }
                     sessionManager.createUserSession(user.getUid(), email);
@@ -108,7 +104,6 @@ public class SignupActivity extends AppCompatActivity {
                                     // After data is saved to both Firebase nodes, send verification email
                                     user.sendEmailVerification().addOnCompleteListener(emailTask -> {
                                         sessionManager.setEmailVerified(false);
-                                        Toast.makeText(this, "Verification email sent", Toast.LENGTH_SHORT).show();
                                         // Navigate to ChooseLoginActivity to show email verification screen
                                         Intent intent = new Intent(SignupActivity.this, ChooseLoginActivity.class);
                                         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -116,15 +111,12 @@ public class SignupActivity extends AppCompatActivity {
                                         finish();
                                     });
                                 } else {
-                                    Toast.makeText(this, "Failed to save user_data", Toast.LENGTH_SHORT).show();
                                 }
                             });
                         } else {
-                            Toast.makeText(this, "Failed to save profile", Toast.LENGTH_SHORT).show();
                         }
                     });
                 } else {
-                    Toast.makeText(this, "Signup failed: " + (task.getException() != null ? task.getException().getMessage() : ""), Toast.LENGTH_LONG).show();
                 }
             });
         });

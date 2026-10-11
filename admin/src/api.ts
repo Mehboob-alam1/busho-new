@@ -1,5 +1,4 @@
 import {
-  createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -23,11 +22,9 @@ import {
 } from "firebase/storage";
 import { auth, db, storage } from "./firebase";
 
-/** Single admin credential for the panel (override via .env). */
+/** Email allowed to access the admin panel; authentication is handled by Firebase. */
 export const ADMIN_EMAIL =
   import.meta.env.VITE_ADMIN_EMAIL || "admin@bushorat.app";
-export const ADMIN_PASSWORD =
-  import.meta.env.VITE_ADMIN_PASSWORD || "Admin@12345";
 
 const SESSION_KEY = "bushorat_admin_session";
 
@@ -73,8 +70,8 @@ function firebaseAuthMessage(err: unknown): string {
   if (code === "auth/too-many-requests") {
     return "Too many failed attempts. Try again later.";
   }
-  if (code === "auth/email-already-in-use") {
-    return "Admin email exists in Firebase with a different password. Reset it in Firebase Auth or update VITE_ADMIN_PASSWORD.";
+  if (code === "auth/user-not-found") {
+    return "Admin account was not found. Create it in Firebase Console → Authentication → Users.";
   }
   if (
     code === "auth/wrong-password" ||
@@ -125,46 +122,17 @@ export function getCurrentUser() {
   return auth.currentUser;
 }
 
-/**
- * Single-credential admin login.
- * Validates local admin email/password, then signs into Firebase
- * (creates the Firebase user automatically on first successful login).
- */
+/** Sign in with the configured admin email and the password entered in the form. */
 export async function loginAdmin(email: string, password: string) {
   const normalized = email.trim().toLowerCase();
-  if (
-    normalized !== ADMIN_EMAIL.toLowerCase() ||
-    password !== ADMIN_PASSWORD
-  ) {
+  if (normalized !== ADMIN_EMAIL.toLowerCase()) {
     throw new Error(`Invalid admin credentials. Use ${ADMIN_EMAIL}`);
   }
 
   try {
-    await signInWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password);
   } catch (err) {
-    const code = (err as { code?: string })?.code || "";
-    const missingOrBad =
-      code === "auth/user-not-found" ||
-      code === "auth/invalid-credential" ||
-      code === "auth/invalid-login-credentials" ||
-      code === "auth/wrong-password";
-
-    if (!missingOrBad) {
-      throw new Error(firebaseAuthMessage(err));
-    }
-
-    // First-time setup: create the admin user, then sign in.
-    try {
-      await createUserWithEmailAndPassword(auth, ADMIN_EMAIL, ADMIN_PASSWORD);
-    } catch (createErr) {
-      const createCode = (createErr as { code?: string })?.code || "";
-      if (createCode === "auth/email-already-in-use") {
-        throw new Error(
-          "Admin email exists in Firebase with a different password. In Firebase Console → Authentication, reset password for admin@bushorat.app to match Admin@12345 (or your .env values)."
-        );
-      }
-      throw new Error(firebaseAuthMessage(createErr));
-    }
+    throw new Error(firebaseAuthMessage(err));
   }
 
   if (!isAdminUser(auth.currentUser)) {

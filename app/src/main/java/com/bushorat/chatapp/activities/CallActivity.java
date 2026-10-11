@@ -1,5 +1,7 @@
 package com.bushorat.chatapp.activities;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -12,7 +14,6 @@ import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Toast;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
@@ -21,17 +22,23 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.ValueEventListener;
 import com.bushorat.chatapp.R;
 import com.bushorat.chatapp.databinding.ActivityCallBinding;
+import com.bushorat.chatapp.helpers.AdminCallNotificationHelper;
 import com.bushorat.chatapp.helpers.AdminChatDisplayHelper;
 import com.bushorat.chatapp.helpers.AdminChatHelper;
+import com.bushorat.chatapp.helpers.CallRingtonePlayer;
+import com.bushorat.chatapp.helpers.FeaturePermissions;
 import com.bushorat.chatapp.helpers.InterfaceJava;
 
 import org.jetbrains.annotations.NotNull;
-
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
 public class CallActivity extends AppCompatActivity {
+
+    private static volatile boolean callScreenVisible;
+
+    public static boolean isOnCallScreen() {
+        return callScreenVisible;
+    }
 
     ActivityCallBinding binding;
     String uniqueId = "";
@@ -45,12 +52,29 @@ public class CallActivity extends AppCompatActivity {
     boolean userInitiatedAdminCall = false;
     String presetConnId;
     boolean videoEnabled = true;
+    boolean userAccepted;
 
     private ValueEventListener adminCallListener;
+    private ValueEventListener callSessionListener;
     private ValueEventListener adminNameListener;
+    private boolean finishingCall;
+    private boolean callSignalEverPresent;
     private String adminDisplayName = "Support";
+    private boolean incomingRing;
+    private boolean remoteConnected;
 
+    private final CallRingtonePlayer ringtonePlayer = new CallRingtonePlayer();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private boolean webViewStarted;
+
+    private final ActivityResultLauncher<String[]> requestCallPermissions =
+            registerForActivityResult(new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                if (FeaturePermissions.hasCallPermissions(this)) {
+                    ensureWebViewStarted();
+                } else {
+                    finish();
+                }
+            });
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,12 +83,43 @@ public class CallActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
 
         readIntentExtras(getIntent());
+        if (adminCall && !userInitiatedAdminCall && !userAccepted) {
+            redirectToIncomingScreen();
+            return;
+        }
+        AdminCallNotificationHelper.cancel(this);
         binding.name.setText(adminDisplayName);
         binding.city.setText("");
 
-        setupWebView();
         bindControls();
         loadAdminDisplayName();
+
+        if (FeaturePermissions.hasCallPermissions(this)) {
+            ensureWebViewStarted();
+        } else {
+            requestCallPermissions.launch(FeaturePermissions.callPermissions());
+        }
+        attachCallSessionListener();
+    }
+
+    private void ensureWebViewStarted() {
+        if (webViewStarted) {
+            return;
+        }
+        webViewStarted = true;
+        setupWebView();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        callScreenVisible = true;
+    }
+
+    @Override
+    protected void onPause() {
+        callScreenVisible = false;
+        super.onPause();
     }
 
     @Override
@@ -72,9 +127,19 @@ public class CallActivity extends AppCompatActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         readIntentExtras(intent);
+        AdminCallNotificationHelper.cancel(this);
         if (adminCall && presetConnId != null && isPeerConnected) {
-            connectToAdminPeer();
+            publishUserPeerAndConnect();
         }
+    }
+
+    private void redirectToIncomingScreen() {
+        if (presetConnId == null || presetConnId.isEmpty()) {
+            finish();
+            return;
+        }
+        startActivity(AdminCallNotificationHelper.buildCallIntent(this, username, presetConnId, videoEnabled));
+        finish();
     }
 
     private void readIntentExtras(android.content.Intent intent) {
@@ -83,6 +148,8 @@ public class CallActivity extends AppCompatActivity {
         userInitiatedAdminCall = intent.getBooleanExtra("userInitiatedAdminCall", false);
         presetConnId = intent.getStringExtra("connId");
         videoEnabled = intent.getBooleanExtra("videoEnabled", true);
+        userAccepted = intent.getBooleanExtra("userAccepted", false);
+        incomingRing = intent.getBooleanExtra("incomingRing", false);
         if (username == null || username.isEmpty()) {
             FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
             username = user != null ? user.getUid() : "";
@@ -103,7 +170,7 @@ public class CallActivity extends AppCompatActivity {
             binding.videoBtn.setImageResource(isVideo ? R.drawable.btn_video_normal : R.drawable.btn_video_muted);
         });
 
-        binding.endCall.setOnClickListener(view -> finish());
+        binding.endCall.setOnClickListener(view -> endCallAndClose());
         binding.videoSizeBtn.setOnClickListener(v -> callJavaScriptFunction("javascript:swapVideos()"));
     }
 
@@ -134,14 +201,14 @@ public class CallActivity extends AppCompatActivity {
 
     void initializePeer() {
         uniqueId = UUID.randomUUID().toString();
-        callJavaScriptFunction("javascript:init(\"" + uniqueId + "\")");
+        callJavaScriptFunction("javascript:init(" + jsQuote(uniqueId) + ")");
     }
 
     public void onPeerConnected() {
         isPeerConnected = true;
         mainHandler.post(() -> {
             if (adminCall && presetConnId != null && !presetConnId.isEmpty()) {
-                connectToAdminPeer();
+                publishUserPeerAndConnect();
                 return;
             }
             if (userInitiatedAdminCall) {
@@ -154,9 +221,27 @@ public class CallActivity extends AppCompatActivity {
     }
 
     public void onPeerError(String message) {
-        mainHandler.post(() ->
-                Toast.makeText(this, message != null ? message : "Call error", Toast.LENGTH_SHORT).show()
-        );
+        // Errors are handled in the WebView call UI; no toast.
+    }
+
+    public void onRemoteConnected() {
+        remoteConnected = true;
+        mainHandler.post(() -> {
+            ringtonePlayer.stop();
+            AdminCallNotificationHelper.cancel(this);
+            if (username != null && !username.isEmpty()) {
+                AdminChatHelper.callsRef(username).child("status").setValue("active");
+            }
+        });
+    }
+
+    private void publishUserPeerAndConnect() {
+        binding.city.setText(R.string.chat_call_connecting);
+        if (username != null && !username.isEmpty() && uniqueId != null && !uniqueId.isEmpty()) {
+            AdminChatHelper.callsRef(username).child("userPeerId").setValue(uniqueId);
+            AdminChatHelper.callsRef(username).child("status").setValue("active");
+        }
+        mainHandler.postDelayed(this::connectToAdminPeer, 1500);
     }
 
     private void connectToAdminPeer() {
@@ -169,7 +254,16 @@ public class CallActivity extends AppCompatActivity {
         }
         binding.loadingGroup.setVisibility(View.GONE);
         binding.controls.setVisibility(View.VISIBLE);
-        callJavaScriptFunction("javascript:startCall(\"" + presetConnId + "\", \"" + videoEnabled + "\")");
+        callJavaScriptFunction(
+                "javascript:startCall(" + jsQuote(presetConnId) + ", " + jsQuote(String.valueOf(videoEnabled)) + ")"
+        );
+    }
+
+    private static String jsQuote(String value) {
+        if (value == null) {
+            return "\"\"";
+        }
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     private void startUserInitiatedAdminCall() {
@@ -177,6 +271,57 @@ public class CallActivity extends AppCompatActivity {
         binding.city.setText(R.string.chat_call_waiting_admin);
         AdminChatHelper.requestCallFromUser(username, videoEnabled, uniqueId);
         listenForAdminAnswer();
+    }
+
+    private void attachCallSessionListener() {
+        if (username == null || username.isEmpty()) {
+            return;
+        }
+        if (callSessionListener != null) {
+            AdminChatHelper.callsRef(username).removeEventListener(callSessionListener);
+        }
+        callSessionListener = new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull @NotNull DataSnapshot snapshot) {
+                if (finishingCall || pageExit) {
+                    return;
+                }
+                if (!snapshot.exists()) {
+                    if (callSignalEverPresent || remoteConnected) {
+                        mainHandler.post(CallActivity.this::endCallLocally);
+                    }
+                    return;
+                }
+                callSignalEverPresent = true;
+                String status = snapshot.child("status").getValue(String.class);
+                if ("ended".equals(status)) {
+                    mainHandler.post(CallActivity.this::endCallLocally);
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull @NotNull DatabaseError error) {
+            }
+        };
+        AdminChatHelper.callsRef(username).addValueEventListener(callSessionListener);
+    }
+
+    private void endCallAndClose() {
+        endCallLocally();
+    }
+
+    private void endCallLocally() {
+        if (finishingCall) {
+            return;
+        }
+        finishingCall = true;
+        ringtonePlayer.stop();
+        AdminCallNotificationHelper.cancel(this);
+        callJavaScriptFunction("javascript:hangup()");
+        if (username != null && !username.isEmpty()) {
+            AdminChatHelper.clearActiveCall(username);
+        }
+        finish();
     }
 
     private void listenForAdminAnswer() {
@@ -230,20 +375,20 @@ public class CallActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         pageExit = true;
+        callScreenVisible = false;
+        ringtonePlayer.stop();
+        AdminCallNotificationHelper.cancel(this);
         if (adminNameListener != null) {
             AdminChatDisplayHelper.removeListener(adminNameListener);
         }
         if (username != null && adminCallListener != null) {
             AdminChatHelper.callsRef(username).removeEventListener(adminCallListener);
         }
-        if (username != null && !username.isEmpty()) {
-            if (userInitiatedAdminCall && !adminCall) {
-                AdminChatHelper.callsRef(username).removeValue();
-            } else {
-                Map<String, Object> clear = new HashMap<>();
-                clear.put("status", "ended");
-                AdminChatHelper.callsRef(username).updateChildren(clear);
-            }
+        if (username != null && callSessionListener != null) {
+            AdminChatHelper.callsRef(username).removeEventListener(callSessionListener);
+        }
+        if (!finishingCall && username != null && !username.isEmpty()) {
+            AdminChatHelper.clearActiveCall(username);
         }
         super.onDestroy();
     }

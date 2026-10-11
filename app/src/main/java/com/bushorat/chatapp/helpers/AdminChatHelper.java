@@ -200,4 +200,12 @@ public final class AdminChatHelper {
     public static void clearUnreadForUser(String userId) {
         metaRef(userId).child("unreadForUser").setValue(false);
     }
+
+    /** Removes call signal so admin and user UIs both disconnect. */
+    public static void clearActiveCall(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return;
+        }
+        callsRef(userId).removeValue();
+    }
 }
