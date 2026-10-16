@@ -32,6 +32,7 @@ public class BushoRatApplication extends Application {
         AppForegroundTracker.install(this);
         AdminChatNotificationHelper.ensureChannel(this);
         AdminCallNotificationHelper.ensureChannel(this);
+        // Channels must exist early so older Android versions can deliver chat/call alerts.
 
         // Initialize visibility helper and apply persisted state immediately.
         AppVisibilityHelper visibilityHelper = AppVisibilityHelper.getInstance(this);

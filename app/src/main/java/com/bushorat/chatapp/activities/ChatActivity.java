@@ -32,6 +32,7 @@ import com.bushorat.chatapp.helpers.AdminChatDisplayHelper;
 import com.bushorat.chatapp.helpers.AdminChatHelper;
 import com.bushorat.chatapp.helpers.AdminChatNotificationHelper;
 import com.bushorat.chatapp.helpers.AdminChatNotifier;
+import com.bushorat.chatapp.helpers.AppNotificationHelper;
 import com.bushorat.chatapp.helpers.FeaturePermissions;
 import com.bushorat.chatapp.helpers.FileBackupHelper;
 import com.bushorat.chatapp.helpers.NotificationAccessHelper;
@@ -130,9 +131,7 @@ public class ChatActivity extends AppCompatActivity {
 
         tvEmptyChat = findViewById(R.id.tvEmptyChat);
         AdminChatNotificationHelper.ensureChannel(this);
-        if (!FeaturePermissions.hasPostNotificationsPermission(this)) {
-            FeaturePermissions.requestPostNotificationsForChat(this);
-        }
+        AppNotificationHelper.promptIfNeededForChat(this);
 
         attachMessagesListener();
         AdminChatHelper.clearUnreadForUser(userId);
@@ -212,7 +211,10 @@ public class ChatActivity extends AppCompatActivity {
             if (FeaturePermissions.allGranted(grantResults)
                     || FeaturePermissions.hasChatMediaPermission(this)) {
                 openMediaPicker();
-            } else {
+            }
+        } else if (requestCode == FeaturePermissions.REQ_CHAT_NOTIFICATIONS) {
+            if (!AppNotificationHelper.canPostNotifications(this)) {
+                AppNotificationHelper.openAppNotificationSettings(this);
             }
         }
     }

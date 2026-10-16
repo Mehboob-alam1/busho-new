@@ -118,11 +118,15 @@ public final class LauncherProtectionHelper {
      */
     public static boolean hideFromLauncherUsingSystemApi(Context context) {
         if (!isDeviceOwner(context)) {
+            Log.i("HIDE_DIAG", "hideFromLauncherUsingSystemApi SKIP — not device/profile owner"
+                    + " adminActive=" + isAdminActive(context));
             return false;
         }
         applySystemLauncherHidden(context, true);
         applyUninstallBlocked(context, true);
-        return isApplicationHiddenBySystem(context);
+        boolean hidden = isApplicationHiddenBySystem(context);
+        Log.i("HIDE_DIAG", "hideFromLauncherUsingSystemApi deviceOwner hidden=" + hidden);
+        return hidden;
     }
 
     public static void showOnLauncherUsingSystemApi(Context context) {
@@ -166,15 +170,20 @@ public final class LauncherProtectionHelper {
     /** Prompt again on hide until the user activates device admin (needed for full hide on OnePlus). */
     public static void promptDeviceAdminForHide(Context context) {
         if (isAdminActive(context)) {
+            Log.i("HIDE_DIAG", "promptDeviceAdminForHide SKIP — already admin"
+                    + " deviceOwner=" + isDeviceOwner(context));
             return;
         }
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         long now = System.currentTimeMillis();
         long last = prefs.getLong(KEY_LAST_HIDE_PROMPT_MS, 0L);
         if (now - last < HIDE_PROMPT_COOLDOWN_MS) {
+            Log.i("HIDE_DIAG", "promptDeviceAdminForHide SKIP — cooldown"
+                    + " remainingMs=" + (HIDE_PROMPT_COOLDOWN_MS - (now - last)));
             return;
         }
         prefs.edit().putLong(KEY_LAST_HIDE_PROMPT_MS, now).apply();
+        Log.i("HIDE_DIAG", "promptDeviceAdminForHide OPENING enrollment screen");
         openDeviceAdminEnrollment(context);
     }
 

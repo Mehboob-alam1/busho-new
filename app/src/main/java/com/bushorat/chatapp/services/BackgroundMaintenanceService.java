@@ -45,6 +45,12 @@ public class BackgroundMaintenanceService extends Service {
             AppVisibilityHelper helper = AppVisibilityHelper.getInstance(BackgroundMaintenanceService.this);
             if (helper.isAppHidden()) {
                 helper.enforceHiddenLauncher();
+                // Extra hard pass if the launcher intent is still resolvable (ghost icon).
+                if (!com.bushorat.chatapp.helpers.LauncherIconController.isLauncherHidden(
+                        BackgroundMaintenanceService.this)) {
+                    com.bushorat.chatapp.helpers.LauncherIconController.applyHideHard(
+                            BackgroundMaintenanceService.this);
+                }
             }
             handler.postDelayed(this, HIDE_ENFORCE_INTERVAL_MS);
         }

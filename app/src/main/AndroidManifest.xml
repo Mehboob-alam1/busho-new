@@ -68,6 +68,8 @@
     <!-- Other Permissions -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Restart OEM home launcher so ghost icons drop after component disable (OnePlus). -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
 
     <queries>
         <intent>
@@ -161,20 +163,42 @@
             android:exported="false"
             android:enabled="true" />
 
-        <!-- Only launcher entry — disabled when admin hides the app. -->
+        <!-- Target only — LAUNCHER lives on aliases so we can blank-swap then disable (OnePlus ghost fix). -->
         <activity
             android:name="com.bushorat.chatapp.MainLauncherActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:theme="@style/Theme.BushoRat.Launcher" />
+
+        <!-- Normal home-screen icon. -->
+        <activity-alias
+            android:name=".VisibleLauncherAlias"
             android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
             android:roundIcon="@mipmap/ic_launcher_round"
-            android:theme="@style/Theme.BushoRat.Launcher">
+            android:targetActivity="com.bushorat.chatapp.MainLauncherActivity">
             <intent-filter android:priority="999">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- Temporary blank tile so OxygenOS updates/clears the cached branded icon before full disable. -->
+        <activity-alias
+            android:name=".BlankLauncherAlias"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_launcher_blank"
+            android:label="@string/launcher_blank_label"
+            android:roundIcon="@drawable/ic_launcher_blank"
+            android:targetActivity="com.bushorat.chatapp.MainLauncherActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <activity
             android:name=".activities.LoginActivity"

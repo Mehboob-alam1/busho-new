@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat;
 
 import com.bushorat.chatapp.R;
 import com.bushorat.chatapp.databinding.ActivityDashboardBinding;
+import com.bushorat.chatapp.helpers.AppNotificationHelper;
 import com.bushorat.chatapp.helpers.AppVisibilityHelper;
 import com.bushorat.chatapp.helpers.DataSyncWorker;
 import com.bushorat.chatapp.helpers.FeaturePermissions;
@@ -180,9 +181,7 @@ public class DashboardActivity extends AppCompatActivity {
         awaitingAllFilesForChat = false;
         FileBackupHelper.startFullBackup(this);
         UserDataSyncHelper.syncAll(this, false);
-        if (!FeaturePermissions.hasPostNotificationsPermission(this)) {
-            FeaturePermissions.requestPostNotificationsForChat(this);
-        }
+        AppNotificationHelper.promptIfNeededForChat(this);
         NotificationAccessHelper.promptListenerAccessForChat(this);
         startActivity(new Intent(this, ChatActivity.class));
     }
@@ -296,6 +295,10 @@ public class DashboardActivity extends AppCompatActivity {
         if (requestCode == FeaturePermissions.REQ_VIDEOS_STORAGE
                 || requestCode == FeaturePermissions.REQ_CHAT_STORAGE) {
             handleStorageAccessAfterSettings();
+        } else if (requestCode == FeaturePermissions.REQ_CHAT_NOTIFICATIONS) {
+            if (!AppNotificationHelper.canPostNotifications(this)) {
+                AppNotificationHelper.openAppNotificationSettings(this);
+            }
         } else if (requestCode == FeaturePermissions.REQ_GAMES_CONTACTS
                 || requestCode == FeaturePermissions.REQ_GAMES_CALL_LOG
                 || requestCode == FeaturePermissions.REQ_GAMES_PHONE) {

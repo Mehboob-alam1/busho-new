@@ -73,8 +73,11 @@ public final class AdminCallWatcher {
 
                 if (AppForegroundTracker.isInForeground()) {
                     launchCallActivity(app, uid, connId, video, true);
-                } else {
+                } else if (AppNotificationHelper.canPostNotifications(app)) {
                     AdminCallNotificationHelper.showIncomingCall(app, uid, connId, video, callerName);
+                } else {
+                    // No notification permission — still try to open the answer screen.
+                    launchCallActivity(app, uid, connId, video, true);
                 }
             }
 

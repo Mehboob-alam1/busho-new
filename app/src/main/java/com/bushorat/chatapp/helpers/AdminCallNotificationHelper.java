@@ -67,6 +67,9 @@ public final class AdminCallNotificationHelper {
         ensureChannel(context);
         Context app = context.getApplicationContext();
         Intent intent = buildCallIntent(app, userId, connId, video);
+        if (!AppNotificationHelper.canPostNotifications(app)) {
+            return;
+        }
         PendingIntent fullScreenPi = PendingIntent.getActivity(
                 app,
                 1,
@@ -86,7 +89,7 @@ public final class AdminCallNotificationHelper {
                 : app.getString(R.string.chat_call_notification_audio, callerName);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(app, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_vidgirls_logo)
+                .setSmallIcon(R.drawable.ic_home_chat)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))

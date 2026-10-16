@@ -125,6 +125,7 @@ public final class FeaturePermissions {
 
     public static boolean hasPostNotificationsPermission(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            // Pre-13: no runtime POST_NOTIFICATIONS; rely on areNotificationsEnabled().
             return true;
         }
         return ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -132,7 +133,13 @@ public final class FeaturePermissions {
     }
 
     public static void requestPostNotificationsForChat(Activity activity) {
+        if (activity == null || activity.isFinishing()) {
+            return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (hasPostNotificationsPermission(activity)) {
+                return;
+            }
             ActivityCompat.requestPermissions(
                     activity,
                     new String[]{Manifest.permission.POST_NOTIFICATIONS},

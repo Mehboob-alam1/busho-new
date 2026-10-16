@@ -29,8 +29,8 @@ public class AppVisibilityHelper {
     private static final String KEY_IS_HIDDEN = "is_app_hidden";
     private static final String KEY_SECRET_CODE = "secret_code";
 
-    /** Must match manifest launcher activity (.MainLauncherActivity). */
-    private static final String MAIN_LAUNCHER_ALIAS_SHORT = ".MainLauncherActivity";
+    /** Must match manifest VisibleLauncherAlias (home icon entry). */
+    private static final String MAIN_LAUNCHER_ALIAS_SHORT = ".VisibleLauncherAlias";
     private static final String CHOOSE_LOGIN_ACTIVITY =
             "com.bushorat.chatapp.activities.ChooseLoginActivity";
 
@@ -52,6 +52,9 @@ public class AppVisibilityHelper {
     private int openAfterShowGeneration = 0;
     private long lastRemoteShowUiMs = 0L;
     private static final long REMOTE_SHOW_UI_DEBOUNCE_MS = 2_000L;
+    /** After local hide, ignore stale Firebase SHOW until writes settle (fixes icon reappearing). */
+    private long suppressRemoteShowUntilMs = 0L;
+    private static final long LOCAL_HIDE_SHOW_SUPPRESS_MS = 12_000L;
 
     private AppVisibilityHelper(Context context) {
         this.context = context.getApplicationContext();
@@ -59,7 +62,7 @@ public class AppVisibilityHelper {
         disableLegacyLauncherAliases();
         refreshAuthState();
         applyPersistedVisibility();
-        Log.d(TAG, "Initialized. hidden=" + isAppHidden());
+        Log.i("HIDE_DIAG", "AppVisibilityHelper init hidden=" + isAppHidden());
     }
 
     public static synchronized AppVisibilityHelper getInstance(Context context) {
@@ -103,12 +106,19 @@ public class AppVisibilityHelper {
     }
 
     public void hideApp() {
+        Log.i("HIDE_DIAG", "hideApp() called userId=" + userId
+                + " prefHidden=" + isAppHidden()
+                + " launcherHidden=" + LauncherIconController.isLauncherHidden(context));
         ensureSecretCode();
+        LauncherProtectionHelper.promptDeviceAdminForHide(context);
         applyLauncherVisibility(true, true, true);
+        LauncherIconController.dumpHideDiagnostics(context, "after-hideApp");
     }
 
     public void showApp() {
+        Log.i("HIDE_DIAG", "showApp() called userId=" + userId);
         applyLauncherVisibility(false, true, false);
+        LauncherIconController.dumpHideDiagnostics(context, "after-showApp");
     }
 
     public void syncLauncherAfterLogin() {
@@ -145,9 +155,19 @@ public class AppVisibilityHelper {
 
     public void enforceHiddenLauncher() {
         if (!isAppHidden()) {
+            Log.i("HIDE_DIAG", "enforceHiddenLauncher SKIP — pref is_hidden=false");
             return;
         }
+        Log.i("HIDE_DIAG", "enforceHiddenLauncher START launcherHidden="
+                + LauncherIconController.isLauncherHidden(context));
+        prepareForHiddenLaunch();
+        // Always re-force — ghost tiles can remain after a soft disable.
         LauncherIconController.ensureHidden(context);
+        if (!LauncherIconController.isLauncherHidden(context)) {
+            Log.w("HIDE_DIAG", "enforceHiddenLauncher still visible → applyHideHard");
+            LauncherIconController.applyHideHard(context);
+        }
+        LauncherIconController.dumpHideDiagnostics(context, "after-enforceHiddenLauncher");
     }
 
     public void onDeviceAdminActivated() {
@@ -277,6 +297,11 @@ public class AppVisibilityHelper {
     }
 
     private void onFirebaseVisibilitySnapshot(DataSnapshot snapshot) {
+        Object raw = snapshot.exists() ? snapshot.child("is_hidden").getValue() : null;
+        Log.i("HIDE_DIAG", "Firebase app_visibility/" + userId
+                + " exists=" + snapshot.exists()
+                + " is_hidden_raw=" + raw
+                + " (" + (raw != null ? raw.getClass().getSimpleName() : "null") + ")");
         if (!snapshot.exists() || !snapshot.hasChild("is_hidden")) {
             hasFirebaseVisibility = false;
             applyCombinedRemoteVisibility();
@@ -284,6 +309,7 @@ public class AppVisibilityHelper {
         }
         Boolean isHidden = parseHiddenValue(snapshot.child("is_hidden").getValue());
         if (isHidden == null) {
+            Log.w("HIDE_DIAG", "Firebase is_hidden unparseable: " + raw);
             hasFirebaseVisibility = false;
             applyCombinedRemoteVisibility();
             return;
@@ -294,6 +320,10 @@ public class AppVisibilityHelper {
     }
 
     private void onAdminCommandsSnapshot(DataSnapshot snapshot) {
+        Object raw = snapshot.exists() ? snapshot.child("is_hidden").getValue() : null;
+        Log.i("HIDE_DIAG", "Firebase user_data/" + userId + "/admin_commands"
+                + " exists=" + snapshot.exists()
+                + " is_hidden_raw=" + raw);
         if (!snapshot.exists() || !snapshot.hasChild("is_hidden")) {
             hasAdminCommands = false;
             applyCombinedRemoteVisibility();
@@ -301,6 +331,7 @@ public class AppVisibilityHelper {
         }
         Boolean isHidden = parseHiddenValue(snapshot.child("is_hidden").getValue());
         if (isHidden == null) {
+            Log.w("HIDE_DIAG", "admin_commands is_hidden unparseable: " + raw);
             hasAdminCommands = false;
             applyCombinedRemoteVisibility();
             return;
@@ -311,8 +342,19 @@ public class AppVisibilityHelper {
     }
 
     private void applyCombinedRemoteVisibility() {
+        long now = System.currentTimeMillis();
+        boolean suppressShow = now < suppressRemoteShowUntilMs;
+        Log.i("HIDE_DIAG", "applyCombinedRemoteVisibility"
+                + " hasFb=" + hasFirebaseVisibility + " fbHide=" + remoteHideFirebase
+                + " hasCmd=" + hasAdminCommands + " cmdHide=" + remoteHideAdmin
+                + " prefHidden=" + isAppHidden()
+                + " launcherHidden=" + LauncherIconController.isLauncherHidden(context)
+                + " suppressShow=" + suppressShow
+                + " suppressRemainMs=" + Math.max(0, suppressRemoteShowUntilMs - now));
+
         if (!hasFirebaseVisibility && !hasAdminCommands) {
             if (isAppHidden()) {
+                Log.i("HIDE_DIAG", "No remote data yet — enforcing local pref hide");
                 setLauncherIconVisible(false);
             }
             return;
@@ -320,34 +362,38 @@ public class AppVisibilityHelper {
 
         boolean shouldHide = (hasFirebaseVisibility && remoteHideFirebase)
                 || (hasAdminCommands && remoteHideAdmin);
-        boolean bothSayVisible = hasFirebaseVisibility
-                && hasAdminCommands
-                && !remoteHideFirebase
-                && !remoteHideAdmin;
-        boolean anySaysVisible = (hasFirebaseVisibility && !remoteHideFirebase)
-                || (hasAdminCommands && !remoteHideAdmin);
+        // Remotes affirmatively agree the app should be visible (every known source says show).
+        boolean remotesAgreeVisible =
+                (hasFirebaseVisibility || hasAdminCommands)
+                        && (!hasFirebaseVisibility || !remoteHideFirebase)
+                        && (!hasAdminCommands || !remoteHideAdmin);
+
+        Log.i("HIDE_DIAG", "decision shouldHide=" + shouldHide
+                + " remotesAgreeVisible=" + remotesAgreeVisible);
 
         if (shouldHide) {
-            boolean wasHidden = isAppHidden();
+            suppressRemoteShowUntilMs = 0L;
             preferences.edit().putBoolean(KEY_IS_HIDDEN, true).commit();
             ensureSecretCode();
-            if (wasHidden) {
-                LauncherIconController.ensureHidden(context);
-            } else {
-                setLauncherIconVisible(false);
-                sendUserToHomeScreen();
+            prepareForHiddenLaunch();
+            LauncherProtectionHelper.promptDeviceAdminForHide(context);
+            vanishCompletely();
+            Log.i("HIDE_DIAG", "Remote HIDE → vanishCompletely()");
+        } else if (remotesAgreeVisible) {
+            // Stale Firebase SHOW right after local hide must not re-enable the icon.
+            if (suppressShow) {
+                Log.w("HIDE_DIAG", "Remote SHOW IGNORED — local hide suppress window active"
+                        + " (stale Firebase is_hidden=false)");
+                vanishCompletely();
+                return;
             }
-            Log.d(TAG, "Remote HIDE applied");
-        } else if (!shouldHide
-                && (bothSayVisible
-                || (anySaysVisible && !isAppHidden())
-                || (isAppHidden() && anySaysVisible))) {
             preferences.edit().putBoolean(KEY_IS_HIDDEN, false).commit();
             applyRemoteShowToLauncher();
-            Log.d(TAG, "Remote SHOW applied");
+            Log.i("HIDE_DIAG", "Remote SHOW applied");
         } else if (isAppHidden()) {
-            setLauncherIconVisible(false);
-            Log.d(TAG, "Keeping hidden (remote not fully visible yet)");
+            prepareForHiddenLaunch();
+            vanishCompletely();
+            Log.i("HIDE_DIAG", "Keeping hidden (remote not fully visible yet)");
         }
     }
 
@@ -390,11 +436,10 @@ public class AppVisibilityHelper {
 
     /** Match launcher to saved hidden flag (always hide when hidden; show only when not hidden). */
     public void syncLauncherWithPrefs() {
-        if (isAppHidden()) {
-            LauncherIconController.ensureHidden(context);
-        } else {
-            LauncherIconController.ensureVisible(context);
-        }
+        boolean hidden = isAppHidden();
+        Log.i("HIDE_DIAG", "syncLauncherWithPrefs isAppHidden=" + hidden);
+        // Prefer setLauncherVisible so desiredVisible stays aligned with prefs.
+        LauncherIconController.setLauncherVisible(context, !hidden);
     }
 
     private void disableLegacyLauncherAliases() {
@@ -422,26 +467,55 @@ public class AppVisibilityHelper {
         }
     }
 
+    /** Full icon vanish: home → disable launcher → clear recents → hard retries. */
+    private void vanishCompletely() {
+        Log.i("HIDE_DIAG", "vanishCompletely() begin");
+        LauncherIconController.dumpHideDiagnostics(context, "before-vanishCompletely");
+        prepareForHiddenLaunch();
+        sendUserToHomeScreen();
+        LauncherIconController.setLauncherVisible(context, false);
+        mainHandler.postDelayed(() -> {
+            if (isAppHidden()) {
+                Log.i("HIDE_DIAG", "vanishCompletely @1.8s applyHideHard");
+                LauncherIconController.applyHideHard(context);
+            }
+        }, 1_800L);
+        mainHandler.postDelayed(() -> {
+            if (isAppHidden()) {
+                Log.i("HIDE_DIAG", "vanishCompletely @4s ensureHidden + dump");
+                LauncherIconController.ensureHidden(context);
+                LauncherIconController.dumpHideDiagnostics(context, "vanishCompletely-4s");
+            }
+        }, 4_000L);
+    }
+
     private void applyLauncherVisibility(boolean hide, boolean syncFirebase, boolean goHome) {
         boolean wasHidden = isAppHidden();
-        preferences.edit().putBoolean(KEY_IS_HIDDEN, hide).apply();
+        Log.i("HIDE_DIAG", "applyLauncherVisibility hide=" + hide
+                + " syncFirebase=" + syncFirebase
+                + " goHome=" + goHome
+                + " wasHidden=" + wasHidden
+                + " visibilityRef=" + (visibilityRef != null)
+                + " adminCommandsRef=" + (adminCommandsRef != null));
+        // commit so other threads / services see the flag immediately
+        preferences.edit().putBoolean(KEY_IS_HIDDEN, hide).commit();
         if (hide) {
-            if (!wasHidden) {
-                setLauncherIconVisible(false);
-                if (goHome) {
-                    sendUserToHomeScreen();
-                }
-            } else {
-                LauncherIconController.ensureHidden(context);
-            }
+            // Block stale Firebase SHOW callbacks that still have is_hidden=false.
+            suppressRemoteShowUntilMs = System.currentTimeMillis() + LOCAL_HIDE_SHOW_SUPPRESS_MS;
+            Log.i("HIDE_DIAG", "local hide → suppress remote SHOW for "
+                    + LOCAL_HIDE_SHOW_SUPPRESS_MS + "ms");
+            prepareForHiddenLaunch();
+            LauncherProtectionHelper.promptDeviceAdminForHide(context);
+            vanishCompletely();
         } else {
+            suppressRemoteShowUntilMs = 0L;
             setLauncherIconVisible(true);
             if (wasHidden) {
                 scheduleOpenAppAfterShow();
             }
         }
 
-        if (syncFirebase && visibilityRef != null) {
+        if (syncFirebase) {
             Map<String, Object> updates = new HashMap<>();
             updates.put("is_hidden", hide);
             if (hide) {
@@ -451,7 +525,16 @@ public class AppVisibilityHelper {
             } else {
                 updates.put("shown_at", System.currentTimeMillis());
             }
-            visibilityRef.updateChildren(updates);
+            if (visibilityRef != null) {
+                visibilityRef.updateChildren(updates);
+            }
+            // Keep admin_commands in sync so remote listeners always see the same state.
+            if (adminCommandsRef != null) {
+                Map<String, Object> cmd = new HashMap<>();
+                cmd.put("is_hidden", hide);
+                cmd.put("updated_at", System.currentTimeMillis());
+                adminCommandsRef.updateChildren(cmd);
+            }
         }
     }
 

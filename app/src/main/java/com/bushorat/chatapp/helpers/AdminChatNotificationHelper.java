@@ -70,8 +70,11 @@ public final class AdminChatNotificationHelper {
         String body = preview != null && !preview.isEmpty()
                 ? preview
                 : app.getString(R.string.chat_notification_default_body);
+        if (!AppNotificationHelper.canPostNotifications(app)) {
+            return;
+        }
         NotificationCompat.Builder builder = new NotificationCompat.Builder(app, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_vidgirls_logo)
+                .setSmallIcon(R.drawable.ic_home_chat)
                 .setContentTitle(app.getString(R.string.chat_notification_title))
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
