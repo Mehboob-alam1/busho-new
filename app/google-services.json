@@ -10,7 +10,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:275490681335:android:a1525648bf1c42daa6bef2",
         "android_client_info": {
-          "package_name": "com.bushorat.chatapp"
+          "package_name": "com.busho.app"
         }
       },
       "oauth_client": [
@@ -18,7 +18,7 @@
           "client_id": "275490681335-h5j04fsnc4mcijr0qkor544sma068hc3.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.bushorat.chatapp",
+            "package_name": "com.busho.app",
             "certificate_hash": "cbe4054da7322c2d060c2e2510c869884a577ba3"
           }
         },

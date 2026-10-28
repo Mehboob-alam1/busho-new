@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.bushorat.chatapp"
+    namespace = "com.busho.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.bushorat.chatapp"
+        applicationId = "com.busho.app"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
